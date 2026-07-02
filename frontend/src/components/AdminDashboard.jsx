@@ -15,7 +15,7 @@ export default function AdminDashboard() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '', price: '', category: 'Mains' });
+  const [formData, setFormData] = useState({ name: '', description: '', price: '', category: 'Mains', image: '' });
 
   useEffect(() => {
     // Fetch initial orders
@@ -54,10 +54,10 @@ export default function AdminDashboard() {
   const openModal = (item = null) => {
     if (item) {
       setEditingItem(item);
-      setFormData({ name: item.name, description: item.description, price: item.price, category: item.category });
+      setFormData({ name: item.name, description: item.description, price: item.price, category: item.category, image: item.image || '' });
     } else {
       setEditingItem(null);
-      setFormData({ name: '', description: '', price: '', category: 'Mains' });
+      setFormData({ name: '', description: '', price: '', category: 'Mains', image: '' });
     }
     setIsModalOpen(true);
   };
@@ -428,6 +428,16 @@ export default function AdminDashboard() {
                     value={formData.description}
                     onChange={e => setFormData({...formData, description: e.target.value})}
                     className="w-full bg-black/50 border border-white/10 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-white transition-all resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Image URL</label>
+                  <input 
+                    type="text" 
+                    placeholder="https://example.com/image.jpg"
+                    value={formData.image}
+                    onChange={e => setFormData({...formData, image: e.target.value})}
+                    className="w-full bg-black/50 border border-white/10 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-white transition-all"
                   />
                 </div>
                 <div className="flex gap-4">
