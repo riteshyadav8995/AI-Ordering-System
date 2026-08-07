@@ -5,6 +5,7 @@ import CustomerInterface from './components/CustomerInterface';
 import AdminDashboard from './components/AdminDashboard';
 import Login from './components/Login';
 import Register from './components/Register';
+import Home from './components/Home';
 import { Loader2 } from 'lucide-react';
 
 const PrivateRoute = ({ children }) => {
@@ -24,7 +25,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/" element={
+      <Route path="/" element={<Home />} />
+      <Route path="/order" element={
         <PrivateRoute>
           <CustomerInterface />
         </PrivateRoute>
@@ -42,7 +44,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-accent">
+        <div className="min-h-screen bg-white">
           <AppRoutes />
         </div>
       </Router>

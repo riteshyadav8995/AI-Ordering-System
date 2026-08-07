@@ -26,6 +26,19 @@ export const apiService = {
     return res.json();
   },
 
+  sendOtp: async (userData) => {
+    const res = await fetch(`${BACKEND_URL}/api/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData)
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.message || 'Failed to send OTP');
+    }
+    return res.json();
+  },
+
   register: async (userData) => {
     const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
       method: 'POST',
@@ -113,6 +126,31 @@ export const apiService = {
       headers: getHeaders()
     });
     if (!res.ok) throw new Error('Failed to delete menu item');
+    return res.json();
+  },
+
+  getAnalytics: async () => {
+    const res = await fetch(`${BACKEND_URL}/api/orders/analytics`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch analytics');
+    return res.json();
+  },
+
+  recoverMissedCall: async (id) => {
+    const res = await fetch(`${BACKEND_URL}/api/orders/missed-calls/${id}/recover`, {
+      method: 'PUT',
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to recover missed call');
+    return res.json();
+  },
+
+  sendTextChat: async (sessionId, text) => {
+    const res = await fetch(`${BACKEND_URL}/api/ai/text-chat`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ sessionId, text })
+    });
+    if (!res.ok) throw new Error('Failed to send text chat');
     return res.json();
   }
 };

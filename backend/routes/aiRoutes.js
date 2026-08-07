@@ -22,4 +22,20 @@ router.post('/chat', protect, async (req, res) => {
   }
 });
 
+router.post('/text-chat', protect, async (req, res) => {
+  try {
+    const { sessionId, text } = req.body;
+    
+    if (!sessionId || !text) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const result = await aiService.processTextChat(sessionId, text, req.io, req.user, 'web');
+    res.json(result);
+  } catch (error) {
+    console.error('Error in AI Text Chat Route:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

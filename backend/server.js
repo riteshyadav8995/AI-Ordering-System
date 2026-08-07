@@ -38,6 +38,7 @@ app.use('/api/orders', require('./routes/orderRoutes'));
 
 app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/webhooks', require('./routes/webhookRoutes'));
 
 // Socket.io Connection Logic (Admin Dashboard)
 io.on('connection', (socket) => {

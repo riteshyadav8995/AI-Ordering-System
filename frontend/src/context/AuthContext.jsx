@@ -25,6 +25,10 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  const sendOtp = async (userData) => {
+    return await apiService.sendOtp(userData);
+  };
+
   const register = async (userData) => {
     const data = await apiService.register(userData);
     setUser(data);
@@ -40,7 +44,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, sendOtp, register, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

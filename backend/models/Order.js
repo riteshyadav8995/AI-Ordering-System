@@ -32,6 +32,16 @@ const orderSchema = new mongoose.Schema({
     ref: 'User'
   },
   customerName: { type: String, default: 'Guest' }, // Or inferred from voice
+  phoneNumber: { type: String }, // For WhatsApp or Exotel calls
+  deliveryAddress: { type: String },
+  isDelivery: { type: Boolean, default: false },
+  handoffRequested: { type: Boolean, default: false },
+  channel: { 
+    type: String, 
+    enum: ['web', 'voice', 'whatsapp'], 
+    default: 'web' 
+  },
+  paymentLink: { type: String }, // URL for WhatsApp payments
   statusTimestamps: {
     pending: { type: Date, default: Date.now },
     preparing: { type: Date },

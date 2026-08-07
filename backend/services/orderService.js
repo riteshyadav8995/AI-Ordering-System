@@ -58,3 +58,57 @@ exports.createOrder = async (orderData) => {
   });
   return await newOrder.save();
 };
+
+// ── Repeat order shortcut ──────────────────────────────────────────
+exports.getLastOrderByPhone = async (phone) => {
+  return await Order.findOne({ phoneNumber: phone }).sort({ createdAt: -1 });
+};
+
+// ── Analytics ─────────────────────────────────────────────────────
+exports.getAnalytics = async () => {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const last7Start = new Date(todayStart);
+  last7Start.setDate(last7Start.getDate() - 6);
+
+  const todayOrders = await Order.find({ createdAt: { $gte: todayStart } });
+  const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+  const daily = await Order.aggregate([
+    { $match: { createdAt: { $gte: last7Start } } },
+    { $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+        count: { $sum: 1 },
+        revenue: { $sum: '$totalAmount' }
+    }},
+    { $sort: { _id: 1 } }
+  ]);
+
+  const channelBreakdown = await Order.aggregate([
+    { $group: { _id: { $ifNull: ['$channel', 'web'] }, count: { $sum: 1 } } }
+  ]);
+
+  const topItems = await Order.aggregate([
+    { $unwind: '$items' },
+    { $group: { _id: '$items.name', totalQty: { $sum: '$items.quantity' } } },
+    { $sort: { totalQty: -1 } },
+    { $limit: 5 }
+  ]);
+
+  let missedCallsToday = 0;
+  let missedCallsPending = 0;
+  try {
+    const MissedCall = require('../models/MissedCall');
+    missedCallsToday = await MissedCall.countDocuments({ createdAt: { $gte: todayStart } });
+    missedCallsPending = await MissedCall.countDocuments({ recovered: false });
+  } catch (e) { /* model may not exist yet */ }
+
+  return {
+    today: { orders: todayOrders.length, revenue: todayRevenue },
+    totalOrders: await Order.countDocuments(),
+    dailyTrend: daily,
+    channelBreakdown,
+    topItems,
+    missedCalls: { today: missedCallsToday, pendingRecovery: missedCallsPending }
+  };
+};

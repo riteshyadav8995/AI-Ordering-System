@@ -94,6 +94,20 @@ const processWithMistral = async (sessionId, base64Audio, mimeType, io, user) =>
             required: ["items", "totalAmount"]
           }
         }
+      },
+      {
+        type: "function",
+        function: {
+          name: "request_handoff",
+          description: "Use this when the customer explicitly asks to speak to a human, or if you are completely stuck and cannot fulfill the order.",
+          parameters: {
+            type: "object",
+            properties: {
+              reason: { type: "string" }
+            },
+            required: ["reason"]
+          }
+        }
       }
     ];
 
@@ -124,19 +138,32 @@ const processWithMistral = async (sessionId, base64Audio, mimeType, io, user) =>
           if (io) {
             io.emit('cartUpdated', args);
           }
-          // Do NOT return here. Let it proceed to push the model's text response to history and return the text.
+        } else if (toolCall.function.name === "request_handoff") {
+          console.log("Mistral triggered request_handoff:", toolCall.function.arguments);
+          let args;
+          try {
+            args = JSON.parse(toolCall.function.arguments);
+          } catch(e) {
+            args = toolCall.function.arguments;
+          }
+          if (io) {
+            io.emit('handoffRequested', { sessionId, reason: args.reason });
+          }
+          outputText = "I am transferring you to a human manager. Please hold on.";
+          // We could also set a flag in the DB or session that this session is handed off.
         }
       }
     }
 
     if (!orderPlaced) {
+      outputText = outputText.replace(/[*#]/g, '').trim();
       history.push({
         role: "model",
         parts: [{ text: outputText }]
       });
     }
 
-    return { text: outputText, orderPlaced, action, paymentDetails };
+    return { text: outputText.replace(/[*#]/g, '').trim(), orderPlaced, action, paymentDetails };
   } finally {
     if (fs.existsSync(tempFilePath)) {
       fs.unlinkSync(tempFilePath);
@@ -157,16 +184,22 @@ const generateAudioResponse = async (sessionId, base64Audio, mimeType, io, user)
       {
         role: "user",
         parts: [{ 
-            text: `System Instruction: You are an AI order taker for a home-delivery restaurant.
+            text: `System Instruction: You are "Aura", an advanced AI order-taking assistant for a premium restaurant. You handle web chat, phone calls, and WhatsApp messages.
 RULES:
-1. Speak ONLY in English, regardless of the language the user speaks. If the user speaks Hindi or Urdu, translate it in your head and reply ONLY in English. Do not use bold formatting or markdown in your speech.
-2. Be extremely concise. Do not use filler words. Do not list out the full menu unless asked.
+1. Speak ONLY in English. If the user speaks Hindi or Urdu, translate it and reply in English.
+2. Be polite, extremely concise, and do not use filler words. Do not list the full menu unless explicitly asked.
+3. If a user asks about ingredients, allergens, or prices, answer accurately based on the menu context provided.
+4. If a user asks to speak to a human or manager, OR if you cannot fulfill their request after 2 attempts, call the "request_handoff" tool immediately and let them know you are transferring them.
+5. DO NOT use markdown formatting (no asterisks, no hashes, no bold). Speak in plain natural text.
 
+MENU CONTEXT:
 ${menuContext}
 
-CHECKOUT WORKFLOW:
+CHECKOUT & OMNICHANNEL WORKFLOW:
 1. ALWAYS call the "update_cart" function whenever the user adds, removes, or modifies items. Calculate the current total and pass it to the function.
-2. When the customer is ready to checkout, politely tell them: "Your order is ready in the Live Cart. Please click the Make Payment button on your screen to finalize your order." Do NOT try to checkout for them.`
+2. Address Collection: Before finalizing, ask for the user's delivery address and phone number if not already provided.
+3. Web Checkout: When the customer is ready to checkout on the web, politely tell them: "Your order is ready. Please click the Make Payment button on your screen to finalize your order."
+4. WhatsApp/Phone Checkout: Say "I have captured your order and address. I will now send a payment link to your WhatsApp. Thank you for ordering!"`
         }]
       },
       {
@@ -187,6 +220,192 @@ CHECKOUT WORKFLOW:
   }
 };
 
+// ── UPI link generator ─────────────────────────────────────────────
+const generateUpiLink = (amount, note = 'Neon Bite Order') => {
+  const vpa = process.env.UPI_VPA || 'neonbite@upi';
+  const name = encodeURIComponent('Neon Bite');
+  const encodedNote = encodeURIComponent(note);
+  return `upi://pay?pa=${vpa}&pn=${name}&am=${amount}&cu=INR&tn=${encodedNote}`;
+};
+
+// ── Shared tool definitions ────────────────────────────────────────
+const getAiTools = () => [
+  {
+    type: "function",
+    function: {
+      name: "update_cart",
+      description: "Call this EVERY TIME the customer adds, removes, or modifies items. Pass the full current cart.",
+      parameters: {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                quantity: { type: "number" },
+                price: { type: "number" },
+                customizations: { type: "array", items: { type: "string" } }
+              },
+              required: ["name", "quantity", "price"]
+            }
+          },
+          totalAmount: { type: "number" }
+        },
+        required: ["items", "totalAmount"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "select_payment",
+      description: "Call this when the customer has confirmed their order and chosen a payment method (UPI or COD). This finalises the order.",
+      parameters: {
+        type: "object",
+        properties: {
+          paymentMethod: { type: "string", enum: ["upi", "cash"] },
+          deliveryAddress: { type: "string" },
+          customerName: { type: "string" },
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                quantity: { type: "number" },
+                price: { type: "number" }
+              },
+              required: ["name", "quantity", "price"]
+            }
+          },
+          totalAmount: { type: "number" }
+        },
+        required: ["paymentMethod", "items", "totalAmount"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "request_handoff",
+      description: "Call this when the customer explicitly asks for a human, or you cannot resolve their issue after 2 attempts.",
+      parameters: {
+        type: "object",
+        properties: {
+          reason: { type: "string" }
+        },
+        required: ["reason"]
+      }
+    }
+  }
+];
+
+// ── Build system prompt ────────────────────────────────────────────
+const buildSystemPrompt = (menuContext, channel = 'web') => `
+System Instruction: You are "Aura", an AI ordering assistant for Neon Bite restaurant. You handle ${channel === 'web' ? 'web chat orders' : channel === 'whatsapp' ? 'WhatsApp orders' : 'phone call orders'}.
+
+RULES:
+1. Reply ONLY in English regardless of the customer's language.
+2. Be warm, polite, and concise. Do NOT list the full menu unprompted.
+3. Answer ingredient, allergen, availability, and price questions accurately from the menu.
+4. For returning customers, proactively offer to repeat their last order.
+5. If you cannot help after 2 tries, call "request_handoff" immediately.
+6. DO NOT use markdown formatting (no asterisks, no hashes, no bold). Output plain text only.
+
+MENU:
+${menuContext}
+
+ORDER WORKFLOW:
+1. Take order → call "update_cart" for every change.
+2. Ask for delivery address and customer name before payment.
+3. Ask: "Would you like to pay via UPI (instant link) or Cash on Delivery?"
+4. Once confirmed, call "select_payment" with all details.
+5. ${channel === 'web'
+    ? 'For web: tell the customer to click Make Payment on their screen.'
+    : 'For WhatsApp/phone: tell the customer a UPI payment link will be sent, or confirm COD.'}
+`;
+
+const processTextChat = async (sessionId, text, io, user, channel = 'web', phoneNumber = null) => {
+  if (!sessionHistory[sessionId]) {
+    const menuContext = await menuService.getMenuContextString();
+    sessionHistory[sessionId] = [
+      { role: "user", parts: [{ text: buildSystemPrompt(menuContext, channel) }] },
+      { role: "model", parts: [{ text: "Understood. Ready to take orders for Neon Bite." }] }
+    ];
+  }
+
+  const history = sessionHistory[sessionId];
+  history.push({ role: "user", parts: [{ text }] });
+
+  const mistralMessages = formatMistralHistory(history);
+  const tools = getAiTools();
+
+  try {
+    const response = await mistralClient.chat.complete({
+      model: "mistral-large-latest",
+      messages: mistralMessages,
+      tools,
+      toolChoice: "auto",
+    });
+
+    const responseMessage = response.choices[0].message;
+    let outputText = responseMessage.content || "";
+    let orderPlaced = false;
+    let orderData = null;
+
+    if (responseMessage.toolCalls && responseMessage.toolCalls.length > 0) {
+      for (const toolCall of responseMessage.toolCalls) {
+        let args = toolCall.function.arguments;
+        if (typeof args === 'string') { try { args = JSON.parse(args); } catch(e) {} }
+
+        if (toolCall.function.name === "update_cart") {
+          if (io) io.emit('cartUpdated', args);
+
+        } else if (toolCall.function.name === "select_payment") {
+          // Build the order data for DB commit
+          orderData = {
+            items: args.items,
+            totalAmount: args.totalAmount,
+            paymentMethod: args.paymentMethod === 'upi' ? 'upi' : 'cash',
+            paymentStatus: args.paymentMethod === 'cash' ? 'Pending' : 'Pending',
+            customerName: args.customerName || 'Guest',
+            deliveryAddress: args.deliveryAddress || '',
+            isDelivery: !!args.deliveryAddress,
+            channel: channel || 'web',
+            phoneNumber: phoneNumber || ''
+          };
+          orderPlaced = true;
+
+          if (args.paymentMethod === 'upi') {
+            const upiLink = generateUpiLink(args.totalAmount, `Order from ${args.customerName || 'Customer'}`);
+            outputText = `Great! Your order is confirmed. Here is your UPI payment link: ${upiLink} — Pay ₹${args.totalAmount} to complete your order. Once paid, your food will be prepared!`;
+            if (io) io.emit('upiPaymentRequested', { sessionId, upiLink, total: args.totalAmount });
+          } else {
+            outputText = `Perfect! Your order is confirmed with Cash on Delivery. Our team will collect ₹${args.totalAmount} at your doorstep. Thank you for ordering from Neon Bite!`;
+          }
+
+          if (io) io.emit('cartUpdated', { items: args.items, totalAmount: args.totalAmount });
+
+        } else if (toolCall.function.name === "request_handoff") {
+          if (io) io.emit('handoffRequested', { sessionId, reason: args.reason, channel, phoneNumber });
+          outputText = "I'm transferring you to our team right away. Please hold on!";
+        }
+      }
+    }
+
+    outputText = outputText.replace(/[*#]/g, '').trim();
+    history.push({ role: "model", parts: [{ text: outputText }] });
+    return { text: outputText, orderPlaced, orderData };
+
+  } catch (err) {
+    console.error("Text chat processing error:", err);
+    return { text: "I'm having trouble right now. Please try again in a moment." };
+  }
+};
+
 module.exports = {
-  generateAudioResponse
+  generateAudioResponse,
+  processTextChat
 };
