@@ -152,5 +152,23 @@ export const apiService = {
     });
     if (!res.ok) throw new Error('Failed to send text chat');
     return res.json();
+  },
+
+  submitFeedback: async (feedbackData) => {
+    const res = await fetch(`${BACKEND_URL}/api/feedback`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(feedbackData)
+    });
+    if (!res.ok) throw new Error('Failed to submit feedback');
+    return res.json();
+  },
+
+  getFeedbacks: async () => {
+    const res = await fetch(`${BACKEND_URL}/api/feedback`, {
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to fetch feedbacks');
+    return res.json();
   }
 };

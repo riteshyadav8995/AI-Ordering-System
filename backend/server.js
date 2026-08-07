@@ -37,6 +37,7 @@ app.use('/api/menu', require('./routes/menuRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 
 app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/feedback', require('./routes/feedbackRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/webhooks', require('./routes/webhookRoutes'));
 

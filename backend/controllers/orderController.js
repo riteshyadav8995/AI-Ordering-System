@@ -45,6 +45,10 @@ exports.updateStatus = async (req, res) => {
             <h3>Order Summary:</h3>
             <ul>${itemsList}</ul>
             <p><strong>Total Paid:</strong> ₹${updatedOrder.totalAmount}</p>
+            <br/>
+            <p>We'd love to hear about your experience!</p>
+            <a href="https://ai-ordering-system.onrender.com/feedback/${updatedOrder._id}" style="display:inline-block;padding:10px 20px;background-color:#06b6d4;color:white;text-decoration:none;border-radius:5px;font-weight:bold;">Leave Feedback</a>
+            <br/><br/>
             <p>Thank you for choosing Neon Bite!</p>
           `
         });

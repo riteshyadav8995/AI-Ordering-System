@@ -6,6 +6,7 @@ import AdminDashboard from './components/AdminDashboard';
 import Login from './components/Login';
 import Register from './components/Register';
 import Home from './components/Home';
+import FeedbackForm from './components/FeedbackForm';
 import { Loader2 } from 'lucide-react';
 
 const PrivateRoute = ({ children }) => {
@@ -26,6 +27,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/" element={<Home />} />
+      <Route path="/feedback/:orderId" element={<FeedbackForm />} />
       <Route path="/order" element={
         <PrivateRoute>
           <CustomerInterface />

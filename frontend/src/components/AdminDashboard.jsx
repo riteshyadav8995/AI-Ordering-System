@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, CheckCircle, ChefHat, LogOut, Utensils, Plus, Edit2, Trash2, X, User as UserIcon } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, LogOut, Utensils, Plus, Edit2, Trash2, X, User as UserIcon, MessageCircle, Star } from 'lucide-react';
 import { BACKEND_URL, apiService } from '../services/apiService';
 import { AuthContext } from '../context/AuthContext';
 
@@ -9,8 +9,9 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [feedbacks, setFeedbacks] = useState([]);
   const [socket, setSocket] = useState(null);
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'menu' | 'history' | 'analytics'
+  const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'menu' | 'history' | 'analytics' | 'feedbacks'
   const { logout, user } = useContext(AuthContext);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -18,6 +19,8 @@ export default function AdminDashboard() {
   const [formData, setFormData] = useState({ name: '', description: '', price: '', category: 'Mains', image: '' });
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [selectedHistoryOrder, setSelectedHistoryOrder] = useState(null);
+  const [liveOrderDetails, setLiveOrderDetails] = useState(null);
+  const [selectedFeedback, setSelectedFeedback] = useState(null);
 
   // Extract unique categories from menuItems or use defaults
   const categories = Array.from(new Set([
@@ -26,20 +29,7 @@ export default function AdminDashboard() {
   ]));
 
   useEffect(() => {
-    // Fetch initial orders
-    apiService.getOrders()
-      .then(data => setOrders(data))
-      .catch(err => console.error("Error fetching orders:", err));
-
-    // Fetch initial menu
-    apiService.getMenu()
-      .then(data => setMenuItems(data))
-      .catch(err => console.error("Error fetching menu:", err));
-
-    // Fetch initial analytics
-    apiService.getAnalytics()
-      .then(data => setAnalytics(data))
-      .catch(err => console.error("Error fetching analytics:", err));
+    fetchData();
 
     // Setup Socket.io
     const newSocket = io(BACKEND_URL);
@@ -59,6 +49,23 @@ export default function AdminDashboard() {
 
     return () => newSocket.close();
   }, []);
+
+  const fetchData = async () => {
+    try {
+      const [ordersData, menuData, analyticsData, feedbackData] = await Promise.all([
+        apiService.getOrders(),
+        apiService.getMenu(),
+        apiService.getAnalytics(),
+        apiService.getFeedbacks().catch(() => [])
+      ]);
+      setOrders(ordersData);
+      setMenuItems(menuData);
+      setAnalytics(analyticsData);
+      setFeedbacks(feedbackData || []);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+    }
+  };
 
   const updateStatus = async (id, status) => {
     try {
@@ -198,6 +205,12 @@ export default function AdminDashboard() {
           >
             Analytics
           </button>
+          <button 
+            onClick={() => setActiveTab('feedbacks')}
+            className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${activeTab === 'feedbacks' ? 'bg-cyan-500 text-white shadow' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            Feedbacks
+          </button>
         </div>
       </header>
 
@@ -206,107 +219,101 @@ export default function AdminDashboard() {
         
         {/* ORDERS TAB */}
         {activeTab === 'orders' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <AnimatePresence>
-              {orders.filter(o => o.status !== 'Completed').map(order => (
-                <motion.div
-                  key={order._id}
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ duration: 0.3 }}
-                  className={`bg-white rounded-3xl border p-6 flex flex-col h-full shadow-sm transition-all hover:shadow-md ${getStatusStyle(order.status)}`}
-                >
-                  <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
-                    <div>
-                      <h3 className="font-black text-xl text-gray-900">Order #{order._id.slice(-4).toUpperCase()}</h3>
-                      <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-2">
-                        <Clock size={12} className="text-cyan-500"/>
-                        {new Date(order.createdAt).toLocaleTimeString()}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getStatusStyle(order.status)}`}>
-                        {order.status}
-                      </span>
-                      {order.paymentMethod && (
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${order.paymentStatus === 'Paid' ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
-                          {order.paymentMethod} • {order.paymentStatus || 'Pending'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex-grow mb-6">
-                    <ul className="space-y-4">
-                      {order.items.map((item, idx) => (
-                        <li key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                          <div className="flex justify-between font-bold text-gray-800">
-                            <span>{item.quantity}x {item.name}</span>
-                          </div>
-                          {item.customizations && item.customizations.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {item.customizations.map((cust, i) => (
-                                <span key={i} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded uppercase tracking-wider">{cust}</span>
-                              ))}
-                            </div>
-                          )}
-                          {item.notes && (
-                            <p className="text-xs text-cyan-700 mt-2 bg-cyan-50 p-1.5 rounded border border-cyan-100">Note: {item.notes}</p>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="mt-auto pt-4 border-t border-gray-200 flex flex-col gap-3">
-                    {order.statusTimestamps && (
-                      <div className="flex justify-between text-[10px] text-gray-500 font-bold tracking-wider bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
-                        {order.statusTimestamps.pending && <div className="flex flex-col items-center"><span>Created</span><span className="text-cyan-600">{new Date(order.statusTimestamps.pending).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>}
-                        {order.statusTimestamps.preparing && <div className="flex flex-col items-center"><span>Prep</span><span className="text-cyan-600">{new Date(order.statusTimestamps.preparing).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>}
-                        {order.statusTimestamps.ready && <div className="flex flex-col items-center"><span>Ready</span><span className="text-cyan-600">{new Date(order.statusTimestamps.ready).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>}
-                      </div>
-                    )}
-                    <div className="flex gap-3 w-full">
-                      {order.status === 'Pending' && (
-                        <button 
-                          onClick={() => updateStatus(order._id, 'Preparing')}
-                          className="flex-1 bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-500 hover:text-white transition-all"
-                        >
-                          Start Preparing
-                        </button>
-                      )}
-                    {order.status === 'Preparing' && (
-                      <button 
-                        onClick={() => updateStatus(order._id, 'Ready')}
-                        className="flex-1 bg-green-50 text-green-700 border border-green-200 py-3 rounded-xl font-bold hover:bg-green-500 hover:text-white transition-all"
-                      >
-                        Mark Ready
-                      </button>
-                    )}
-                    {order.status === 'Ready' && (
-                      <button 
-                        onClick={() => updateStatus(order._id, 'Completed')}
-                        className="flex-1 bg-gray-100 text-gray-700 border border-gray-200 py-3 rounded-xl font-bold hover:bg-gray-900 hover:text-white transition-all"
-                      >
-                        Complete Order
-                      </button>
-                    )}
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white">
+              <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-900">
+                <Utensils size={24} className="text-cyan-500"/> Live Orders
+              </h2>
+            </div>
             
-            {orders.filter(o => o.status !== 'Completed').length === 0 && (
-              <div className="col-span-full py-32 flex flex-col items-center justify-center text-gray-500">
-                <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center mb-6">
-                   <CheckCircle size={48} className="opacity-20" />
-                </div>
-                <p className="text-2xl font-black text-gray-900 mb-2">No active orders</p>
-                <p className="text-gray-600">Waiting for new incoming orders...</p>
-              </div>
-            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest font-bold">
+                  <tr>
+                    <th className="px-8 py-5 border-b border-gray-100">Customer Name</th>
+                    <th className="px-8 py-5 border-b border-gray-100">Order ID</th>
+                    <th className="px-8 py-5 border-b border-gray-100">Prepare</th>
+                    <th className="px-8 py-5 border-b border-gray-100">Ready</th>
+                    <th className="px-8 py-5 border-b border-gray-100">Delivered</th>
+                    <th className="px-8 py-5 border-b border-gray-100 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  <AnimatePresence>
+                    {orders.filter(o => o.status !== 'Completed').map(order => (
+                      <motion.tr 
+                        key={order._id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-8 py-5 font-bold text-gray-900">
+                          {order.customerName || 'Guest'}
+                        </td>
+                        <td className="px-8 py-5 font-bold text-gray-600">
+                          #{order._id.slice(-6).toUpperCase()}
+                        </td>
+                        <td className="px-8 py-5">
+                          <select 
+                            className={`px-4 py-2 rounded-xl font-bold text-sm outline-none border ${order.status === 'Pending' ? 'bg-white border-gray-200 text-gray-500' : 'bg-blue-50 border-blue-200 text-blue-600'}`}
+                            value={order.status !== 'Pending' ? 'Yes' : 'No'}
+                            onChange={(e) => { if(e.target.value === 'Yes') updateStatus(order._id, 'Preparing') }}
+                            disabled={order.status !== 'Pending'}
+                          >
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                          </select>
+                        </td>
+                        <td className="px-8 py-5">
+                          <select 
+                            className={`px-4 py-2 rounded-xl font-bold text-sm outline-none border ${order.status === 'Ready' || order.status === 'Completed' ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-gray-200 text-gray-500'}`}
+                            value={order.status === 'Ready' || order.status === 'Completed' ? 'Yes' : 'No'}
+                            onChange={(e) => { if(e.target.value === 'Yes') updateStatus(order._id, 'Ready') }}
+                            disabled={order.status === 'Ready' || order.status === 'Pending'}
+                          >
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                          </select>
+                        </td>
+                        <td className="px-8 py-5">
+                          <select 
+                            className={`px-4 py-2 rounded-xl font-bold text-sm outline-none border ${order.status === 'Completed' ? 'bg-cyan-50 border-cyan-200 text-cyan-600' : 'bg-white border-gray-200 text-gray-500'}`}
+                            value={order.status === 'Completed' ? 'Yes' : 'No'}
+                            onChange={(e) => { if(e.target.value === 'Yes') updateStatus(order._id, 'Completed') }}
+                            disabled={order.status !== 'Ready'}
+                          >
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                          </select>
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <button 
+                            onClick={() => setLiveOrderDetails(order)}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-bold text-sm transition-colors"
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                  {orders.filter(o => o.status !== 'Completed').length === 0 && (
+                    <tr>
+                      <td colSpan="6" className="px-8 py-20 text-center text-gray-500">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                            <CheckCircle size={32} className="opacity-20" />
+                          </div>
+                          <p className="text-xl font-black text-gray-900">No active orders</p>
+                          <p className="text-sm">Waiting for new incoming orders...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -476,6 +483,59 @@ export default function AdminDashboard() {
                   {!analytics?.topItems?.length && <p className="text-gray-500">No data available.</p>}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* FEEDBACKS TAB */}
+        {activeTab === 'feedbacks' && (
+          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white">
+              <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-900">
+                <MessageCircle size={24} className="text-cyan-500"/> Customer Feedbacks
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest font-bold">
+                  <tr>
+                    <th className="px-8 py-5 border-b border-gray-100">Date</th>
+                    <th className="px-8 py-5 border-b border-gray-100">Customer</th>
+                    <th className="px-8 py-5 border-b border-gray-100">Rating</th>
+                    <th className="px-8 py-5 border-b border-gray-100 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {feedbacks.map(fb => (
+                    <tr key={fb._id} className="hover:bg-gray-50 transition-colors group">
+                      <td className="px-8 py-5 text-gray-500 text-sm">{new Date(fb.createdAt).toLocaleString()}</td>
+                      <td className="px-8 py-5 font-bold text-gray-900">{fb.customerName}</td>
+                      <td className="px-8 py-5">
+                        <div className="flex text-yellow-400">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} size={16} className={i < fb.rating ? 'fill-yellow-400' : 'text-gray-200 fill-transparent'} />
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <button 
+                          onClick={() => setSelectedFeedback(fb)}
+                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-bold text-sm transition-colors"
+                        >
+                          Read Feedback
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {feedbacks.length === 0 && (
+                    <tr>
+                      <td colSpan="4" className="px-8 py-20 text-center text-gray-500 font-medium">
+                        No feedback received yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -672,6 +732,120 @@ export default function AdminDashboard() {
                 <span className="font-bold uppercase tracking-wider">Total Paid</span>
                 <span className="text-2xl font-black text-green-400">₹{selectedHistoryOrder.totalAmount.toFixed(2)}</span>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* LIVE ORDER DETAILS MODAL */}
+      <AnimatePresence>
+        {liveOrderDetails && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[2rem] p-8 w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto"
+            >
+              <button 
+                onClick={() => setLiveOrderDetails(null)}
+                className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+              >
+                <X size={18} />
+              </button>
+              
+              <h2 className="text-2xl font-black text-gray-900 mb-6">Live Order #{liveOrderDetails._id.slice(-6).toUpperCase()}</h2>
+              
+              <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Customer</span>
+                  <span className="font-bold text-gray-900">{liveOrderDetails.customerName || 'Guest'}</span>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Time</span>
+                  <span className="font-bold text-gray-900">{new Date(liveOrderDetails.createdAt).toLocaleTimeString()}</span>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Payment</span>
+                  <span className="font-bold text-gray-900">{liveOrderDetails.paymentMethod ? liveOrderDetails.paymentMethod.toUpperCase() : 'N/A'} - {liveOrderDetails.paymentStatus}</span>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Channel</span>
+                  <span className="font-bold text-gray-900 capitalize">{liveOrderDetails.channel || 'web'}</span>
+                </div>
+              </div>
+
+              <h3 className="font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Order Items</h3>
+              <ul className="space-y-3 mb-6">
+                {liveOrderDetails.items.map((item, idx) => (
+                  <li key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex justify-between items-start">
+                    <div>
+                      <span className="font-bold text-gray-800">{item.quantity}x {item.name}</span>
+                      {item.customizations && item.customizations.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {item.customizations.map((cust, i) => (
+                            <span key={i} className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded uppercase tracking-wider">{cust}</span>
+                          ))}
+                        </div>
+                      )}
+                      {item.notes && (
+                        <p className="text-xs text-cyan-700 mt-2 bg-cyan-50 p-1.5 rounded border border-cyan-100">Note: {item.notes}</p>
+                      )}
+                    </div>
+                    <span className="font-bold text-gray-900">₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex justify-between items-center bg-gray-900 text-white p-4 rounded-xl">
+                <span className="font-bold uppercase tracking-wider">Total</span>
+                <span className="text-2xl font-black text-green-400">₹{liveOrderDetails.totalAmount.toFixed(2)}</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* FEEDBACK DETAILS MODAL */}
+      <AnimatePresence>
+        {selectedFeedback && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setSelectedFeedback(null)}
+                className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+              >
+                <X size={18} />
+              </button>
+              
+              <div className="text-center mb-6 mt-4">
+                <div className="w-16 h-16 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <UserIcon size={32} />
+                </div>
+                <h2 className="text-2xl font-black text-gray-900">{selectedFeedback.customerName}</h2>
+                <p className="text-sm text-gray-500 mt-1">{new Date(selectedFeedback.createdAt).toLocaleString()}</p>
+              </div>
+              
+              <div className="flex justify-center text-yellow-400 mb-6">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} size={32} className={i < selectedFeedback.rating ? 'fill-yellow-400' : 'text-gray-200 fill-transparent'} />
+                ))}
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Customer Comments</h3>
+                <p className="text-gray-900 font-medium italic">"{selectedFeedback.comments || 'No comments provided.'}"</p>
+              </div>
+              
+              {selectedFeedback.orderId && (
+                <div className="mt-6 text-center">
+                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Order Total: <span className="text-gray-900">₹{selectedFeedback.orderId.totalAmount}</span></p>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
