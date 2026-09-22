@@ -1,14 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
 
 @import "tailwindcss";
+
+@theme {
+  --font-display: 'Fraunces', Georgia, serif;
+  --color-cream: #ffffff;
+  --color-ink: #000000;
+  --color-line: #e5e5e5;
+  --color-accent: #000000;
+  --color-accent-dark: #262626;
+  --color-accent-soft: #f5f5f5;
+}
+
+html {
+  scroll-behavior: smooth;
+}
 
 body {
   margin: 0;
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f9f9f9;
-  color: #1a1a1a;
+  background-color: #ffffff;
+  color: #000000;
 }
 
 /* Custom premium scrollbar */

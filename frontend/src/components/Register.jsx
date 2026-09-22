@@ -62,13 +62,13 @@ export default function Register() {
           </Link>
 
           <h2 className="text-5xl font-black leading-tight mb-6 text-gray-900">
-            Start automating<br/>
-            <span className="text-gray-500">your orders</span><br/>
-            today.
+            Order your food<br/>
+            <span className="text-gray-500">just by speaking</span><br/>
+            or typing.
           </h2>
 
           <p className="text-gray-500 text-base mb-10 leading-relaxed">
-            Create an account to unlock AI-powered restaurant management. Manage your menu, track live orders, and never miss a phone call again.
+            Create an account to start ordering. Tell our AI assistant what you want by voice or chat, watch your cart fill up, and track your order live.
           </p>
 
           <div className="space-y-5">

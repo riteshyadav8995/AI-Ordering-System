@@ -7,17 +7,20 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Home from './components/Home';
 import FeedbackForm from './components/FeedbackForm';
+import MenuPage from './components/MenuPage';
+import About from './components/About';
+import Contact from './components/Contact';
 import { Loader2 } from 'lucide-react';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]"><Loader2 className="animate-spin text-cyan-500" size={48}/></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-black" size={48}/></div>;
   return user ? children : <Navigate to="/login" />;
 };
 
 const AdminRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]"><Loader2 className="animate-spin text-cyan-500" size={48}/></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-black" size={48}/></div>;
   return user && user.role === 'admin' ? children : <Navigate to="/login" />;
 };
 
@@ -27,6 +30,9 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/" element={<Home />} />
+      <Route path="/menu" element={<MenuPage />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/contact" element={<Contact />} />
       <Route path="/feedback/:orderId" element={<FeedbackForm />} />
       <Route path="/order" element={
         <PrivateRoute>

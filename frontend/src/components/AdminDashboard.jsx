@@ -1,16 +1,88 @@
 import { useState, useEffect, useContext } from 'react';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, CheckCircle, ChefHat, LogOut, Utensils, Plus, Edit2, Trash2, X, User as UserIcon, MessageCircle, Star } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CheckCircle, LogOut, Utensils, Plus, Edit2, Trash2, X, User as UserIcon, Star } from 'lucide-react';
 import { BACKEND_URL, apiService } from '../services/apiService';
 import { AuthContext } from '../context/AuthContext';
+
+const inputClass = 'w-full bg-transparent border border-line px-3.5 py-2.5 rounded-md outline-none focus:border-ink text-ink text-sm transition-colors';
+const th = 'px-5 py-3 font-medium';
+const td = 'px-5 py-4';
+
+const Panel = ({ title, action, children }) => (
+  <div className="border border-line rounded-xl overflow-hidden">
+    <div className="px-5 py-4 border-b border-line flex justify-between items-center gap-4">
+      <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
+      {action}
+    </div>
+    <div className="overflow-x-auto">{children}</div>
+  </div>
+);
+
+const Stars = ({ rating, size = 15 }) => (
+  <div className="flex">
+    {[...Array(5)].map((_, i) => (
+      <Star key={i} size={size} className={i < rating ? 'text-accent fill-accent' : 'text-line fill-transparent'} />
+    ))}
+  </div>
+);
+
+const Modal = ({ onClose, children, width = 'max-w-2xl' }) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/40" onClick={onClose}>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      onClick={(e) => e.stopPropagation()}
+      className={`bg-cream rounded-xl p-7 w-full ${width} relative max-h-[90vh] overflow-y-auto`}
+    >
+      <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-black hover:bg-line hover:text-ink transition-colors">
+        <X size={17} />
+      </button>
+      {children}
+    </motion.div>
+  </div>
+);
+
+const OrderDetails = ({ order, title, meta }) => (
+  <>
+    <h2 className="font-display text-2xl font-semibold text-ink mb-5 pr-8">{title}</h2>
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 mb-6 text-sm">
+      {meta.map(([label, value]) => (
+        <div key={label}>
+          <dt className="text-xs text-black mb-0.5">{label}</dt>
+          <dd className="text-ink">{value}</dd>
+        </div>
+      ))}
+    </dl>
+    <ul className="border-t border-line mb-5">
+      {order.items.map((item, idx) => (
+        <li key={idx} className="py-3 border-b border-line flex justify-between items-start gap-4 text-sm">
+          <div>
+            <span className="text-ink">{item.quantity} × {item.name}</span>
+            {item.customizations?.length > 0 && (
+              <div className="text-xs text-black mt-0.5">{item.customizations.join(', ')}</div>
+            )}
+            {item.notes && <p className="text-xs text-accent-dark mt-1">Note: {item.notes}</p>}
+          </div>
+          <span className="text-ink tabular-nums">₹{(item.price * item.quantity).toFixed(2)}</span>
+        </li>
+      ))}
+    </ul>
+    <div className="flex justify-between items-baseline">
+      <span className="font-medium text-ink">Total</span>
+      <span className="text-2xl font-semibold text-ink tabular-nums">₹{order.totalAmount.toFixed(2)}</span>
+    </div>
+  </>
+);
+
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [feedbacks, setFeedbacks] = useState([]);
-  const [socket, setSocket] = useState(null);
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'menu' | 'history' | 'analytics' | 'feedbacks'
   const { logout, user } = useContext(AuthContext);
 
@@ -28,28 +100,6 @@ export default function AdminDashboard() {
     ...menuItems.map(item => item.category)
   ]));
 
-  useEffect(() => {
-    fetchData();
-
-    // Setup Socket.io
-    const newSocket = io(BACKEND_URL);
-    setSocket(newSocket);
-
-    newSocket.on('newOrder', (order) => {
-      setOrders(prev => [order, ...prev]);
-    });
-
-    newSocket.on('orderUpdated', (updatedOrder) => {
-      setOrders(prev => prev.map(o => o._id === updatedOrder._id ? updatedOrder : o));
-    });
-
-    newSocket.on('handoffRequested', (data) => {
-      alert(`⚠️ URGENT: Human Handoff Requested!\nReason: ${data.reason}`);
-    });
-
-    return () => newSocket.close();
-  }, []);
-
   const fetchData = async () => {
     try {
       const [ordersData, menuData, analyticsData, feedbackData] = await Promise.all([
@@ -66,6 +116,27 @@ export default function AdminDashboard() {
       console.error('Error fetching dashboard data:', err);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+
+    // Setup Socket.io
+    const newSocket = io(BACKEND_URL);
+
+    newSocket.on('newOrder', (order) => {
+      setOrders(prev => [order, ...prev]);
+    });
+
+    newSocket.on('orderUpdated', (updatedOrder) => {
+      setOrders(prev => prev.map(o => o._id === updatedOrder._id ? updatedOrder : o));
+    });
+
+    newSocket.on('handoffRequested', (data) => {
+      alert(`⚠️ URGENT: Human Handoff Requested!\nReason: ${data.reason}`);
+    });
+
+    return () => newSocket.close();
+  }, []);
 
   const updateStatus = async (id, status) => {
     try {
@@ -126,362 +197,280 @@ export default function AdminDashboard() {
 
   const getStatusStyle = (status) => {
     switch(status) {
-      case 'Pending': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
-      case 'Preparing': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Ready': return 'bg-green-50 text-green-700 border-green-200';
-      case 'Completed': return 'bg-gray-100 text-gray-500 border-gray-200';
-      default: return 'bg-white border-gray-200 text-gray-900';
+      case 'Pending': return 'text-black border-black';
+      case 'Preparing': return 'bg-neutral-100 text-black border-neutral-300';
+      case 'Ready': return 'bg-black text-white border-black';
+      case 'Completed': return 'text-neutral-500 border-line';
+      default: return 'text-ink border-line';
     }
   };
 
+  const tabs = [
+    ['orders', 'Live orders'],
+    ['menu', 'Menu'],
+    ['history', 'Order history'],
+    ['analytics', 'Analytics'],
+    ['feedbacks', 'Feedback'],
+  ];
+
+  // The one action a kitchen takes next for each status.
+  const nextStep = {
+    Pending: { label: 'Start preparing', status: 'Preparing' },
+    Preparing: { label: 'Mark ready', status: 'Ready' },
+    Ready: { label: 'Mark delivered', status: 'Completed' },
+  };
+
+  const liveOrders = orders.filter(o => o.status !== 'Completed');
+  const avgRating = feedbacks.length ? (feedbacks.reduce((s, f) => s + f.rating, 0) / feedbacks.length).toFixed(1) : '–';
+
   return (
-    <div className="min-h-screen bg-white flex flex-col text-gray-900 font-sans">
-      
+    <div className="min-h-screen bg-cream flex flex-col text-black">
 
       {/* TOP NAVBAR */}
-      <nav className="w-full z-50 border-b border-gray-200 bg-white/80 backdrop-blur-xl px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="Neon Bite Logo" className="w-10 h-10 rounded-lg object-cover shadow-[0_0_15px_rgba(6,182,212,0.5)]" />
-          <div>
-            <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 tracking-tight leading-tight">
-              Neon Bite
-            </h1>
-            <p className="text-gray-600 text-[10px] font-medium uppercase tracking-widest leading-none mt-0.5">Admin Console</p>
-          </div>
-        </div>
+      <nav className="w-full border-b border-line px-5 md:px-8 h-16 flex items-center justify-between shrink-0">
+        <Link to="/" className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="" className="w-8 h-8 rounded-md object-cover" />
+          <span className="font-display text-xl font-semibold text-ink">Neon Bite</span>
+          <span className="hidden sm:inline text-xs text-black border border-line rounded px-1.5 py-0.5">Admin</span>
+        </Link>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-full backdrop-blur-md">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_#22c55e]"></div>
-            <span className="text-sm font-medium text-gray-600 hidden md:block">System Live</span>
-          </div>
-          <div className="hidden md:flex items-center gap-2 bg-white border border-gray-200 px-4 py-1.5 rounded-full backdrop-blur-md">
-            <UserIcon size={14} className="text-cyan-400" />
-            <span className="text-sm font-medium text-gray-900">{user?.firstName} {user?.lastName}</span>
-          </div>
-          <button 
-            onClick={logout} 
-            className="flex items-center gap-2 text-gray-600 hover:text-red-400 transition-colors bg-white hover:bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200 backdrop-blur-md"
-          >
-            <LogOut size={14} /> 
-            <span className="text-sm font-medium hidden sm:block">Log out</span>
+        <div className="flex items-center gap-5 text-sm">
+          <span className="flex items-center gap-2 text-black">
+            <span className="w-2 h-2 rounded-full bg-black" />
+            <span className="hidden md:inline">Receiving orders</span>
+          </span>
+          <span className="hidden md:flex items-center gap-2 text-black">
+            <UserIcon size={15} /> {user?.firstName} {user?.lastName}
+          </span>
+          <button onClick={logout} className="flex items-center gap-1.5 text-black hover:text-accent transition-colors">
+            <LogOut size={15} /> <span className="hidden sm:inline">Log out</span>
           </button>
         </div>
       </nav>
 
-      {/* HEADER SECTION */}
-      <header className="relative z-10 px-8 py-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-gray-100 bg-white">
-        <div>
-          <h1 className="text-4xl font-black text-gray-900 flex items-center gap-4 tracking-tight">
-            <ChefHat className="text-cyan-400" size={36} />
-            Dashboard
-          </h1>
-          <p className="text-gray-600 mt-2 text-lg">Manage your live orders and restaurant menu</p>
-        </div>
-        
-        {/* TABS */}
-        <div className="flex bg-white p-1 rounded-2xl border border-gray-200 shadow-sm">
-          <button 
-            onClick={() => setActiveTab('orders')}
-            className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${activeTab === 'orders' ? 'bg-cyan-500 text-white shadow' : 'text-gray-500 hover:text-gray-900'}`}
-          >
-            Live Orders
-          </button>
-          <button 
-            onClick={() => setActiveTab('menu')}
-            className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${activeTab === 'menu' ? 'bg-purple-500 text-white shadow' : 'text-gray-500 hover:text-gray-900'}`}
-          >
-            Menu Manager
-          </button>
-          <button 
-            onClick={() => setActiveTab('history')}
-            className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${activeTab === 'history' ? 'bg-orange-500 text-white shadow' : 'text-gray-500 hover:text-gray-900'}`}
-          >
-            Order History
-          </button>
-          <button 
-            onClick={() => setActiveTab('analytics')}
-            className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${activeTab === 'analytics' ? 'bg-green-500 text-white shadow' : 'text-gray-500 hover:text-gray-900'}`}
-          >
-            Analytics
-          </button>
-          <button 
-            onClick={() => setActiveTab('feedbacks')}
-            className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${activeTab === 'feedbacks' ? 'bg-cyan-500 text-white shadow' : 'text-gray-500 hover:text-gray-900'}`}
-          >
-            Feedbacks
-          </button>
+      {/* HEADER + TABS */}
+      <header className="px-5 md:px-8 pt-8 border-b border-line">
+        <h1 className="font-display text-[32px] font-semibold text-ink leading-tight">Kitchen</h1>
+        <p className="text-black mt-1">Live orders, menu and customer feedback.</p>
+        <div className="flex gap-6 mt-6 overflow-x-auto hide-scrollbar text-sm">
+          {tabs.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`pb-3 -mb-px border-b-2 whitespace-nowrap transition-colors ${
+                activeTab === key ? 'border-accent text-ink font-medium' : 'border-transparent text-black hover:text-ink'
+              }`}
+            >
+              {label}
+              {key === 'orders' && liveOrders.length > 0 && (
+                <span className="ml-1.5 text-xs bg-accent text-white rounded-full px-1.5 py-0.5">{liveOrders.length}</span>
+              )}
+            </button>
+          ))}
         </div>
       </header>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto p-8 bg-gray-50">
-        
+      <main className="flex-1 overflow-y-auto px-5 md:px-8 py-8">
+
         {/* ORDERS TAB */}
         {activeTab === 'orders' && (
-          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white">
-              <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-900">
-                <Utensils size={24} className="text-cyan-500"/> Live Orders
-              </h2>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest font-bold">
-                  <tr>
-                    <th className="px-8 py-5 border-b border-gray-100">Customer Name</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Order ID</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Prepare</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Ready</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Delivered</th>
-                    <th className="px-8 py-5 border-b border-gray-100 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  <AnimatePresence>
-                    {orders.filter(o => o.status !== 'Completed').map(order => (
-                      <motion.tr 
-                        key={order._id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="hover:bg-gray-50 transition-colors"
-                      >
-                        <td className="px-8 py-5 font-bold text-gray-900">
-                          {order.customerName || 'Guest'}
-                        </td>
-                        <td className="px-8 py-5 font-bold text-gray-600">
+          <Panel title="Live orders">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-black border-b border-line">
+                <tr>
+                  <th className={th}>Order</th>
+                  <th className={th}>Customer</th>
+                  <th className={th}>Items</th>
+                  <th className={th}>Status</th>
+                  <th className={`${th} text-right`}>Next step</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                <AnimatePresence>
+                  {liveOrders.map(order => (
+                    <motion.tr key={order._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <td className={td}>
+                        <button onClick={() => setLiveOrderDetails(order)} className="font-medium text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
                           #{order._id.slice(-6).toUpperCase()}
-                        </td>
-                        <td className="px-8 py-5">
-                          <select 
-                            className={`px-4 py-2 rounded-xl font-bold text-sm outline-none border ${order.status === 'Pending' ? 'bg-white border-gray-200 text-gray-500' : 'bg-blue-50 border-blue-200 text-blue-600'}`}
-                            value={order.status !== 'Pending' ? 'Yes' : 'No'}
-                            onChange={(e) => { if(e.target.value === 'Yes') updateStatus(order._id, 'Preparing') }}
-                            disabled={order.status !== 'Pending'}
-                          >
-                            <option value="No">No</option>
-                            <option value="Yes">Yes</option>
-                          </select>
-                        </td>
-                        <td className="px-8 py-5">
-                          <select 
-                            className={`px-4 py-2 rounded-xl font-bold text-sm outline-none border ${order.status === 'Ready' || order.status === 'Completed' ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-gray-200 text-gray-500'}`}
-                            value={order.status === 'Ready' || order.status === 'Completed' ? 'Yes' : 'No'}
-                            onChange={(e) => { if(e.target.value === 'Yes') updateStatus(order._id, 'Ready') }}
-                            disabled={order.status === 'Ready' || order.status === 'Pending'}
-                          >
-                            <option value="No">No</option>
-                            <option value="Yes">Yes</option>
-                          </select>
-                        </td>
-                        <td className="px-8 py-5">
-                          <select 
-                            className={`px-4 py-2 rounded-xl font-bold text-sm outline-none border ${order.status === 'Completed' ? 'bg-cyan-50 border-cyan-200 text-cyan-600' : 'bg-white border-gray-200 text-gray-500'}`}
-                            value={order.status === 'Completed' ? 'Yes' : 'No'}
-                            onChange={(e) => { if(e.target.value === 'Yes') updateStatus(order._id, 'Completed') }}
-                            disabled={order.status !== 'Ready'}
-                          >
-                            <option value="No">No</option>
-                            <option value="Yes">Yes</option>
-                          </select>
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <button 
-                            onClick={() => setLiveOrderDetails(order)}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-bold text-sm transition-colors"
-                          >
-                            View Details
-                          </button>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence>
-                  {orders.filter(o => o.status !== 'Completed').length === 0 && (
-                    <tr>
-                      <td colSpan="6" className="px-8 py-20 text-center text-gray-500">
-                        <div className="flex flex-col items-center justify-center">
-                          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                            <CheckCircle size={32} className="opacity-20" />
-                          </div>
-                          <p className="text-xl font-black text-gray-900">No active orders</p>
-                          <p className="text-sm">Waiting for new incoming orders...</p>
-                        </div>
+                        </button>
+                        <div className="text-xs text-black mt-0.5">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                       </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                      <td className={`${td} text-ink`}>{order.customerName || 'Guest'}</td>
+                      <td className={`${td} text-black max-w-xs`}>
+                        <span className="line-clamp-2">{order.items.map(i => `${i.quantity}× ${i.name}`).join(', ')}</span>
+                      </td>
+                      <td className={td}>
+                        <span className={`text-xs px-2 py-1 rounded-full border ${getStatusStyle(order.status)}`}>{order.status}</span>
+                      </td>
+                      <td className={`${td} text-right`}>
+                        {nextStep[order.status] && (
+                          <button
+                            onClick={() => updateStatus(order._id, nextStep[order.status].status)}
+                            className="px-3.5 py-2 rounded-md bg-accent text-white text-xs font-medium hover:bg-accent-dark transition-colors whitespace-nowrap"
+                          >
+                            {nextStep[order.status].label}
+                          </button>
+                        )}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
+                {liveOrders.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="px-5 py-16 text-center">
+                      <CheckCircle size={30} className="mx-auto mb-3 text-neutral-300" />
+                      <p className="font-medium text-ink">No active orders</p>
+                      <p className="text-sm text-black mt-1">New orders will appear here as they come in.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </Panel>
         )}
 
         {/* MENU MANAGER TAB */}
         {activeTab === 'menu' && (
-          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white">
-              <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-900">
-                <Utensils size={24} className="text-purple-500"/> Product Catalog
-              </h2>
-              <button 
-                onClick={() => openNewModal()}
-                className="bg-purple-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-purple-600 transition-colors flex items-center gap-2 shadow-sm"
-              >
-                <Plus size={20} /> Add Product
+          <Panel
+            title="Menu"
+            action={
+              <button onClick={openNewModal} className="px-3.5 py-2 rounded-md bg-accent text-white text-sm font-medium hover:bg-accent-dark transition-colors flex items-center gap-1.5">
+                <Plus size={16} /> Add item
               </button>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest font-bold">
-                  <tr>
-                    <th className="px-8 py-5 border-b border-gray-100">Product Name</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Category</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Price</th>
-                    <th className="px-8 py-5 border-b border-gray-100 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {menuItems.map(item => (
-                    <tr key={item._id} className="hover:bg-white transition-colors group">
-                      <td className="px-8 py-5">
-                        <div className="font-bold text-gray-900 text-lg mb-1">{item.name}</div>
-                        <div className="text-sm text-gray-600 truncate max-w-sm">{item.description}</div>
-                      </td>
-                      <td className="px-8 py-5">
-                        <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-xs font-bold uppercase tracking-wider">
-                          {item.category}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5 font-black text-green-600 text-lg">₹{Number(item.price).toFixed(2)}</td>
-                      <td className="px-8 py-5">
-                        <div className="flex justify-end gap-3">
-                          <button onClick={() => openModal(item)} className="p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">
-                            <Edit2 size={18} />
-                          </button>
-                          <button onClick={() => handleDeleteMenu(item._id)} className="p-2.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors">
-                            <Trash2 size={18} />
-                          </button>
+            }
+          >
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-black border-b border-line">
+                <tr>
+                  <th className={th}>Item</th>
+                  <th className={th}>Category</th>
+                  <th className={th}>Price</th>
+                  <th className={`${th} text-right`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {menuItems.map(item => (
+                  <tr key={item._id}>
+                    <td className={td}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-md bg-line overflow-hidden shrink-0">
+                          {item.image ? <img src={item.image} alt="" className="w-full h-full object-cover" /> : <Utensils size={18} className="m-auto mt-3 text-neutral-400" />}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {menuItems.length === 0 && (
-                    <tr>
-                      <td colSpan="4" className="px-8 py-20 text-center text-gray-500 font-medium">
-                        No menu items found. Click "Add Product" to create one.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-ink">{item.name}</div>
+                          <div className="text-xs text-black truncate max-w-xs">{item.description}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className={`${td} text-black`}>{item.category}</td>
+                    <td className={`${td} text-ink tabular-nums`}>₹{Number(item.price).toFixed(2)}</td>
+                    <td className={td}>
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => handleEdit(item)} aria-label="Edit" className="p-2 text-black hover:text-ink hover:bg-line rounded-md transition-colors">
+                          <Edit2 size={16} />
+                        </button>
+                        <button onClick={() => handleDeleteMenu(item._id)} aria-label="Delete" className="p-2 text-black hover:text-red-700 hover:bg-red-50 rounded-md transition-colors">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {menuItems.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="px-5 py-16 text-center text-black">No menu items yet. Click "Add item" to create one.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </Panel>
         )}
 
         {/* ORDER HISTORY TAB */}
         {activeTab === 'history' && (
-          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white">
-              <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-900">
-                <Clock size={24} className="text-orange-500"/> Order History
-              </h2>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest font-bold">
-                  <tr>
-                    <th className="px-8 py-5 border-b border-gray-100">Order ID</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Date & Time</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Customer</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Total</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {orders.map(order => (
-                    <tr key={order._id} className="hover:bg-white transition-colors group">
-                      <td 
-                        className="px-8 py-5 font-bold text-cyan-600 hover:text-cyan-700 cursor-pointer underline decoration-cyan-200 underline-offset-4"
-                        onClick={() => setSelectedHistoryOrder(order)}
-                      >
+          <Panel title="Order history">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-black border-b border-line">
+                <tr>
+                  <th className={th}>Order</th>
+                  <th className={th}>Date & time</th>
+                  <th className={th}>Customer</th>
+                  <th className={th}>Total</th>
+                  <th className={th}>Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {orders.map(order => (
+                  <tr key={order._id}>
+                    <td className={td}>
+                      <button onClick={() => setSelectedHistoryOrder(order)} className="font-medium text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
                         #{order._id.slice(-6).toUpperCase()}
-                      </td>
-                      <td className="px-8 py-5 text-gray-500 text-sm">{new Date(order.createdAt).toLocaleString()}</td>
-                      <td className="px-8 py-5 text-gray-900">{order.customerName}</td>
-                      <td className="px-8 py-5 font-black text-green-600">₹{order.totalAmount.toFixed(2)}</td>
-                      <td className="px-8 py-5">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getStatusStyle(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {orders.length === 0 && (
-                    <tr>
-                      <td colSpan="5" className="px-8 py-20 text-center text-gray-500 font-medium">
-                        No orders found in history.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                      </button>
+                    </td>
+                    <td className={`${td} text-black`}>{new Date(order.createdAt).toLocaleString()}</td>
+                    <td className={`${td} text-ink`}>{order.customerName}</td>
+                    <td className={`${td} text-ink tabular-nums`}>₹{order.totalAmount.toFixed(2)}</td>
+                    <td className={td}>
+                      <span className={`text-xs px-2 py-1 rounded-full border ${getStatusStyle(order.status)}`}>{order.status}</span>
+                    </td>
+                  </tr>
+                ))}
+                {orders.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="px-5 py-16 text-center text-black">No orders yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </Panel>
         )}
 
         {/* ANALYTICS TAB */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-                <div className="text-gray-500 text-xs font-bold uppercase tracking-wider">Today's Revenue</div>
-                <div className="text-2xl font-black text-gray-900">₹{analytics?.today?.revenue?.toFixed(2) || '0.00'}</div>
-              </div>
-              <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-                <div className="text-gray-500 text-xs font-bold uppercase tracking-wider">Today's Orders</div>
-                <div className="text-2xl font-black text-gray-900">{analytics?.today?.orders || 0}</div>
-              </div>
-              <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-                <div className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Orders</div>
-                <div className="text-2xl font-black text-gray-900">{analytics?.totalOrders || 0}</div>
-              </div>
-              <div className="bg-red-50 rounded-2xl p-5 border border-red-200 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
-                <div className="text-red-600 text-xs font-bold uppercase tracking-wider">Missed Calls</div>
-                <div className="text-2xl font-black text-red-600">{analytics?.missedCalls?.pendingRecovery || 0}</div>
-              </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 border border-line rounded-xl divide-x divide-y lg:divide-y-0 divide-line overflow-hidden">
+              {[
+                ["Today's revenue", `₹${analytics?.today?.revenue?.toFixed(2) || '0.00'}`],
+                ["Today's orders", analytics?.today?.orders || 0],
+                ['Total orders', analytics?.totalOrders || 0],
+                ['Average rating', avgRating],
+              ].map(([label, value]) => (
+                <div key={label} className="p-5">
+                  <div className="text-xs text-black">{label}</div>
+                  <div className="mt-1.5 text-2xl font-semibold text-ink tabular-nums">{value}</div>
+                </div>
+              ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Channel Breakdown</h3>
-                <div className="space-y-4">
-                  {analytics?.channelBreakdown?.map(c => (
-                    <div key={c._id} className="flex justify-between items-center border-b border-gray-100 pb-3">
-                      <span className="font-bold text-gray-600 capitalize">{c._id}</span>
-                      <span className="bg-gray-100 text-gray-900 px-3 py-1 rounded-lg font-black">{c.count}</span>
-                    </div>
-                  ))}
-                  {!analytics?.channelBreakdown?.length && <p className="text-gray-500">No data available.</p>}
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Top Selling Items</h3>
-                <div className="space-y-4">
+              <div className="border border-line rounded-xl p-6">
+                <h3 className="font-display text-lg font-semibold text-ink mb-4">Top selling items</h3>
+                <ol className="divide-y divide-line">
                   {analytics?.topItems?.map((item, idx) => (
-                    <div key={item._id} className="flex justify-between items-center border-b border-gray-100 pb-3">
-                      <div className="flex gap-3 items-center">
-                        <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{idx + 1}</span>
-                        <span className="font-bold text-gray-900">{item._id}</span>
-                      </div>
-                      <span className="text-gray-500">{item.totalQty} ordered</span>
-                    </div>
+                    <li key={item._id} className="flex justify-between items-center py-3 text-sm">
+                      <span className="flex gap-3 items-center">
+                        <span className="w-5 text-neutral-400 tabular-nums">{idx + 1}</span>
+                        <span className="text-ink">{item._id}</span>
+                      </span>
+                      <span className="text-black">{item.totalQty} ordered</span>
+                    </li>
                   ))}
-                  {!analytics?.topItems?.length && <p className="text-gray-500">No data available.</p>}
-                </div>
+                </ol>
+                {!analytics?.topItems?.length && <p className="text-sm text-black">No data yet.</p>}
+              </div>
+
+              <div className="border border-line rounded-xl p-6">
+                <h3 className="font-display text-lg font-semibold text-ink mb-4">Orders by channel</h3>
+                <ul className="divide-y divide-line">
+                  {analytics?.channelBreakdown?.map(c => (
+                    <li key={c._id} className="flex justify-between items-center py-3 text-sm">
+                      <span className="text-ink capitalize">{c._id}</span>
+                      <span className="text-black tabular-nums">{c.count}</span>
+                    </li>
+                  ))}
+                </ul>
+                {!analytics?.channelBreakdown?.length && <p className="text-sm text-black">No data yet.</p>}
               </div>
             </div>
           </div>
@@ -489,365 +478,147 @@ export default function AdminDashboard() {
 
         {/* FEEDBACKS TAB */}
         {activeTab === 'feedbacks' && (
-          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white">
-              <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-900">
-                <MessageCircle size={24} className="text-cyan-500"/> Customer Feedbacks
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest font-bold">
-                  <tr>
-                    <th className="px-8 py-5 border-b border-gray-100">Date</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Customer</th>
-                    <th className="px-8 py-5 border-b border-gray-100">Rating</th>
-                    <th className="px-8 py-5 border-b border-gray-100 text-right">Action</th>
+          <Panel title="Customer feedback">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-black border-b border-line">
+                <tr>
+                  <th className={th}>Date</th>
+                  <th className={th}>Customer</th>
+                  <th className={th}>Rating</th>
+                  <th className={th}>Comment</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {feedbacks.map(fb => (
+                  <tr key={fb._id} onClick={() => setSelectedFeedback(fb)} className="cursor-pointer hover:bg-accent-soft/40 transition-colors">
+                    <td className={`${td} text-black whitespace-nowrap`}>{new Date(fb.createdAt).toLocaleDateString()}</td>
+                    <td className={`${td} text-ink`}>{fb.customerName}</td>
+                    <td className={td}><Stars rating={fb.rating} /></td>
+                    <td className={`${td} text-black max-w-sm`}><span className="line-clamp-1">{fb.comments || '—'}</span></td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {feedbacks.map(fb => (
-                    <tr key={fb._id} className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-8 py-5 text-gray-500 text-sm">{new Date(fb.createdAt).toLocaleString()}</td>
-                      <td className="px-8 py-5 font-bold text-gray-900">{fb.customerName}</td>
-                      <td className="px-8 py-5">
-                        <div className="flex text-yellow-400">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} size={16} className={i < fb.rating ? 'fill-yellow-400' : 'text-gray-200 fill-transparent'} />
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-8 py-5 text-right">
-                        <button 
-                          onClick={() => setSelectedFeedback(fb)}
-                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-bold text-sm transition-colors"
-                        >
-                          Read Feedback
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {feedbacks.length === 0 && (
-                    <tr>
-                      <td colSpan="4" className="px-8 py-20 text-center text-gray-500 font-medium">
-                        No feedback received yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                ))}
+                {feedbacks.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="px-5 py-16 text-center text-black">No feedback yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </Panel>
         )}
 
       </main>
 
-      {/* MODAL */}
+      {/* ADD / EDIT MENU ITEM MODAL */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-white/70 backdrop-blur-md">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white border border-gray-200 rounded-[2rem] w-full max-w-lg overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
-            >
-              <div className="p-8 border-b border-gray-200 flex justify-between items-center bg-white">
-                <h3 className="text-2xl font-black text-gray-900">{editingItem ? 'Edit Product' : 'Add New Product'}</h3>
-                <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-200 transition-all">
-                  <X size={18} />
+          <Modal onClose={() => setIsModalOpen(false)} width="max-w-lg">
+            <h3 className="font-display text-2xl font-semibold text-ink mb-6">{editingItem ? 'Edit item' : 'Add item'}</h3>
+            <form onSubmit={handleSaveMenu} className="space-y-4">
+              <label className="block text-sm text-black">Name
+                <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={`${inputClass} mt-1.5`} />
+              </label>
+              <label className="block text-sm text-black">Description
+                <textarea required rows="3" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className={`${inputClass} mt-1.5 resize-none`} />
+              </label>
+              <label className="block text-sm text-black">Image URL
+                <input type="text" placeholder="/images/burger.png" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} className={`${inputClass} mt-1.5`} />
+              </label>
+              <div className="flex gap-4">
+                <label className="flex-1 block text-sm text-black">Price (₹)
+                  <input type="number" step="0.01" required value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className={`${inputClass} mt-1.5`} />
+                </label>
+                <div className="flex-1 text-sm text-black">
+                  Category
+                  {isCustomCategory ? (
+                    <div className="flex gap-2 mt-1.5">
+                      <input type="text" required placeholder="New category" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className={inputClass} />
+                      <button type="button" onClick={() => { setIsCustomCategory(false); setFormData({...formData, category: 'Starters'}); }} aria-label="Cancel new category" className="px-2.5 text-black hover:text-ink">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.category}
+                      onChange={e => {
+                        if (e.target.value === '__NEW__') {
+                          setIsCustomCategory(true);
+                          setFormData({...formData, category: ''});
+                        } else {
+                          setFormData({...formData, category: e.target.value});
+                        }
+                      }}
+                      className={`${inputClass} mt-1.5`}
+                    >
+                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      <option value="__NEW__">+ New category</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-md border border-line text-ink text-sm font-medium hover:border-ink transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 py-3 rounded-md bg-accent text-white text-sm font-medium hover:bg-accent-dark transition-colors">
+                  {editingItem ? 'Save changes' : 'Add item'}
                 </button>
               </div>
-              <form onSubmit={handleSaveMenu} className="p-8 space-y-6">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Product Name</label>
-                  <input 
-                    type="text" 
-                    required 
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-gray-900 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Description</label>
-                  <textarea 
-                    required 
-                    rows="3"
-                    value={formData.description}
-                    onChange={e => setFormData({...formData, description: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-gray-900 transition-all resize-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Image URL</label>
-                  <input 
-                    type="text" 
-                    placeholder="https://example.com/image.jpg"
-                    value={formData.image}
-                    onChange={e => setFormData({...formData, image: e.target.value})}
-                    className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-gray-900 transition-all"
-                  />
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Price (₹)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      required 
-                      value={formData.price}
-                      onChange={e => setFormData({...formData, price: e.target.value})}
-                      className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-gray-900 font-bold transition-all"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Category</label>
-                    {isCustomCategory ? (
-                      <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="Type new category"
-                          value={formData.category}
-                          onChange={e => setFormData({...formData, category: e.target.value})}
-                          className="flex-1 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-gray-900 transition-all"
-                        />
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setIsCustomCategory(false);
-                            setFormData({...formData, category: 'Starters'});
-                          }}
-                          className="px-4 py-3 bg-gray-100 text-gray-500 rounded-xl hover:bg-gray-200 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <select 
-                        value={formData.category}
-                        onChange={e => {
-                          if (e.target.value === '__NEW__') {
-                            setIsCustomCategory(true);
-                            setFormData({...formData, category: ''});
-                          } else {
-                            setFormData({...formData, category: e.target.value});
-                          }
-                        }}
-                        className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-gray-900 transition-all appearance-none"
-                      >
-                        {categories.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                        <option value="__NEW__" className="font-bold text-cyan-600">+ Add New Category</option>
-                      </select>
-                    )}
-                  </div>
-                </div>
-                <div className="pt-4 flex gap-4 mt-8">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsModalOpen(false)}
-                    className="flex-1 px-4 py-4 rounded-xl border border-gray-200 bg-white font-bold text-gray-300 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    className="flex-1 px-4 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-gray-900 font-bold hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all"
-                  >
-                    {editingItem ? 'Save Changes' : 'Create Product'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
+            </form>
+          </Modal>
         )}
       </AnimatePresence>
 
       {/* HISTORY ORDER MODAL */}
       <AnimatePresence>
         {selectedHistoryOrder && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-[2rem] p-8 w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto"
-            >
-              <button 
-                onClick={() => setSelectedHistoryOrder(null)}
-                className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-              >
-                <X size={18} />
-              </button>
-              
-              <h2 className="text-2xl font-black text-gray-900 mb-6">Order #{selectedHistoryOrder._id.slice(-6).toUpperCase()}</h2>
-              
-              <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Customer</span>
-                  <span className="font-bold text-gray-900">{selectedHistoryOrder.customerName || 'Guest'}</span>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Date & Time</span>
-                  <span className="font-bold text-gray-900">{new Date(selectedHistoryOrder.createdAt).toLocaleString()}</span>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Status</span>
-                  <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${getStatusStyle(selectedHistoryOrder.status)}`}>
-                    {selectedHistoryOrder.status}
-                  </span>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Payment</span>
-                  <span className="font-bold text-gray-900">{selectedHistoryOrder.paymentMethod ? selectedHistoryOrder.paymentMethod.toUpperCase() : 'N/A'} - {selectedHistoryOrder.paymentStatus}</span>
-                </div>
-              </div>
-
-              <h3 className="font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Order Items</h3>
-              <ul className="space-y-3 mb-6">
-                {selectedHistoryOrder.items.map((item, idx) => (
-                  <li key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex justify-between items-start">
-                    <div>
-                      <span className="font-bold text-gray-800">{item.quantity}x {item.name}</span>
-                      {item.customizations && item.customizations.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {item.customizations.map((cust, i) => (
-                            <span key={i} className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded uppercase tracking-wider">{cust}</span>
-                          ))}
-                        </div>
-                      )}
-                      {item.notes && (
-                        <p className="text-xs text-cyan-700 mt-2 bg-cyan-50 p-1.5 rounded border border-cyan-100">Note: {item.notes}</p>
-                      )}
-                    </div>
-                    <span className="font-bold text-gray-900">₹{(item.price * item.quantity).toFixed(2)}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <div className="flex justify-between items-center bg-gray-900 text-white p-4 rounded-xl">
-                <span className="font-bold uppercase tracking-wider">Total Paid</span>
-                <span className="text-2xl font-black text-green-400">₹{selectedHistoryOrder.totalAmount.toFixed(2)}</span>
-              </div>
-            </motion.div>
-          </div>
+          <Modal onClose={() => setSelectedHistoryOrder(null)}>
+            <OrderDetails
+              order={selectedHistoryOrder}
+              title={`Order #${selectedHistoryOrder._id.slice(-6).toUpperCase()}`}
+              meta={[
+                ['Customer', selectedHistoryOrder.customerName || 'Guest'],
+                ['Date & time', new Date(selectedHistoryOrder.createdAt).toLocaleString()],
+                ['Status', selectedHistoryOrder.status],
+                ['Payment', `${selectedHistoryOrder.paymentMethod ? selectedHistoryOrder.paymentMethod.toUpperCase() : 'N/A'} · ${selectedHistoryOrder.paymentStatus}`],
+              ]}
+            />
+          </Modal>
         )}
       </AnimatePresence>
 
       {/* LIVE ORDER DETAILS MODAL */}
       <AnimatePresence>
         {liveOrderDetails && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-[2rem] p-8 w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto"
-            >
-              <button 
-                onClick={() => setLiveOrderDetails(null)}
-                className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-              >
-                <X size={18} />
-              </button>
-              
-              <h2 className="text-2xl font-black text-gray-900 mb-6">Live Order #{liveOrderDetails._id.slice(-6).toUpperCase()}</h2>
-              
-              <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Customer</span>
-                  <span className="font-bold text-gray-900">{liveOrderDetails.customerName || 'Guest'}</span>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Time</span>
-                  <span className="font-bold text-gray-900">{new Date(liveOrderDetails.createdAt).toLocaleTimeString()}</span>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Payment</span>
-                  <span className="font-bold text-gray-900">{liveOrderDetails.paymentMethod ? liveOrderDetails.paymentMethod.toUpperCase() : 'N/A'} - {liveOrderDetails.paymentStatus}</span>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider text-xs block mb-1">Channel</span>
-                  <span className="font-bold text-gray-900 capitalize">{liveOrderDetails.channel || 'web'}</span>
-                </div>
-              </div>
-
-              <h3 className="font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">Order Items</h3>
-              <ul className="space-y-3 mb-6">
-                {liveOrderDetails.items.map((item, idx) => (
-                  <li key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex justify-between items-start">
-                    <div>
-                      <span className="font-bold text-gray-800">{item.quantity}x {item.name}</span>
-                      {item.customizations && item.customizations.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {item.customizations.map((cust, i) => (
-                            <span key={i} className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded uppercase tracking-wider">{cust}</span>
-                          ))}
-                        </div>
-                      )}
-                      {item.notes && (
-                        <p className="text-xs text-cyan-700 mt-2 bg-cyan-50 p-1.5 rounded border border-cyan-100">Note: {item.notes}</p>
-                      )}
-                    </div>
-                    <span className="font-bold text-gray-900">₹{(item.price * item.quantity).toFixed(2)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex justify-between items-center bg-gray-900 text-white p-4 rounded-xl">
-                <span className="font-bold uppercase tracking-wider">Total</span>
-                <span className="text-2xl font-black text-green-400">₹{liveOrderDetails.totalAmount.toFixed(2)}</span>
-              </div>
-            </motion.div>
-          </div>
+          <Modal onClose={() => setLiveOrderDetails(null)}>
+            <OrderDetails
+              order={liveOrderDetails}
+              title={`Order #${liveOrderDetails._id.slice(-6).toUpperCase()}`}
+              meta={[
+                ['Customer', liveOrderDetails.customerName || 'Guest'],
+                ['Time', new Date(liveOrderDetails.createdAt).toLocaleTimeString()],
+                ['Payment', `${liveOrderDetails.paymentMethod ? liveOrderDetails.paymentMethod.toUpperCase() : 'N/A'} · ${liveOrderDetails.paymentStatus}`],
+                ['Channel', <span key="c" className="capitalize">{liveOrderDetails.channel || 'web'}</span>],
+              ]}
+            />
+          </Modal>
         )}
       </AnimatePresence>
 
       {/* FEEDBACK DETAILS MODAL */}
       <AnimatePresence>
         {selectedFeedback && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl relative"
-            >
-              <button 
-                onClick={() => setSelectedFeedback(null)}
-                className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-              >
-                <X size={18} />
-              </button>
-              
-              <div className="text-center mb-6 mt-4">
-                <div className="w-16 h-16 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <UserIcon size={32} />
-                </div>
-                <h2 className="text-2xl font-black text-gray-900">{selectedFeedback.customerName}</h2>
-                <p className="text-sm text-gray-500 mt-1">{new Date(selectedFeedback.createdAt).toLocaleString()}</p>
-              </div>
-              
-              <div className="flex justify-center text-yellow-400 mb-6">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={32} className={i < selectedFeedback.rating ? 'fill-yellow-400' : 'text-gray-200 fill-transparent'} />
-                ))}
-              </div>
-
-              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Customer Comments</h3>
-                <p className="text-gray-900 font-medium italic">"{selectedFeedback.comments || 'No comments provided.'}"</p>
-              </div>
-              
-              {selectedFeedback.orderId && (
-                <div className="mt-6 text-center">
-                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Order Total: <span className="text-gray-900">₹{selectedFeedback.orderId.totalAmount}</span></p>
-                </div>
-              )}
-            </motion.div>
-          </div>
+          <Modal onClose={() => setSelectedFeedback(null)} width="max-w-md">
+            <h2 className="font-display text-2xl font-semibold text-ink pr-8">{selectedFeedback.customerName}</h2>
+            <p className="text-sm text-black mt-1">{new Date(selectedFeedback.createdAt).toLocaleString()}</p>
+            <div className="my-5"><Stars rating={selectedFeedback.rating} size={22} /></div>
+            <p className="text-ink leading-relaxed border-l-2 border-accent pl-4">
+              {selectedFeedback.comments || 'No comments provided.'}
+            </p>
+            {selectedFeedback.orderId && (
+              <p className="mt-6 text-sm text-black">Order total: <span className="text-ink">₹{selectedFeedback.orderId.totalAmount}</span></p>
+            )}
+          </Modal>
         )}
       </AnimatePresence>
 

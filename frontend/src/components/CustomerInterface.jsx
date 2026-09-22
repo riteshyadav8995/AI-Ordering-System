@@ -1,7 +1,8 @@
 import { useState, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io } from 'socket.io-client';
-import { Mic, Loader2, Utensils, CheckCircle, Volume2, QrCode, CreditCard, ShieldCheck, LogOut, ShoppingCart, Info, User as UserIcon, X, Clock, MessageCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Mic, Loader2, Utensils, CheckCircle, Check, Volume2, QrCode, CreditCard, ShieldCheck, LogOut, ShoppingCart, Info, User as UserIcon, X, Clock, Send } from 'lucide-react';
 import { useGemini } from '../hooks/useGemini';
 import { BACKEND_URL, apiService } from '../services/apiService';
 import { AuthContext } from '../context/AuthContext';
@@ -36,7 +37,7 @@ export default function CustomerInterface() {
   // Text Bot State
   const [textInput, setTextInput] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [chatSessionId] = useState(`web_text_${Math.random().toString(36).substring(7)}`);
+  const [chatSessionId] = useState(() => `web_text_${Math.random().toString(36).substring(7)}`);
   const [chatHistory, setChatHistory] = useState([]);
 
   useEffect(() => {
@@ -150,410 +151,338 @@ export default function CustomerInterface() {
     }
   };
 
+  const statuses = ['Pending', 'Preparing', 'Ready', 'Completed'];
+  const hasCart = liveCart && liveCart.items.length > 0;
+
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden bg-gray-50">
-      
-      {/* Background Gradients */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className={`absolute top-1/4 left-1/4 w-[50vw] h-[50vw] rounded-full blur-[120px] opacity-40 transition-all duration-1000 ${isRecording ? 'bg-gradient-to-r from-cyan-500 to-blue-500 scale-110' : 'bg-gradient-to-r from-blue-900 to-purple-900 scale-100'}`}></div>
-        <div className={`absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] rounded-full blur-[100px] opacity-30 transition-all duration-1000 delay-100 ${isRecording ? 'bg-gradient-to-r from-purple-500 to-pink-500 scale-110' : 'bg-gradient-to-r from-gray-800 to-gray-200 scale-100'}`}></div>
-      </div>
+    <div className="h-screen flex flex-col overflow-hidden bg-cream text-black">
 
       {/* TOP NAVBAR */}
-      <nav className="w-full z-50 border-b border-gray-200 bg-white/80 backdrop-blur-xl px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="Neon Bite Logo" className="w-10 h-10 rounded-lg object-cover shadow-[0_0_15px_rgba(6,182,212,0.5)]" />
-          <div>
-            <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 tracking-tight leading-tight">
-              Neon Bite
-            </h1>
-            <p className="text-gray-600 text-[10px] font-medium uppercase tracking-widest leading-none mt-0.5">AI-Powered Food Delivery</p>
-          </div>
-        </div>
+      <nav className="w-full z-50 border-b border-line bg-cream px-5 md:px-8 h-16 flex items-center justify-between shrink-0">
+        <Link to="/" className="flex items-center gap-2.5">
+          <img src="/logo.png" alt="" className="w-8 h-8 rounded-md object-cover" />
+          <span className="font-display text-xl font-semibold text-ink">Neon Bite</span>
+        </Link>
 
-        <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-4 bg-white border border-gray-200 px-6 py-2 rounded-full backdrop-blur-md">
-            <button onClick={() => setActiveTab('menu')} className={`font-bold transition-all text-sm ${activeTab === 'menu' ? 'text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-gray-600 hover:text-gray-900'}`}>New Order</button>
-            <div className="w-px h-4 bg-gray-200"></div>
-            <button onClick={() => setActiveTab('history')} className={`font-bold transition-all text-sm ${activeTab === 'history' ? 'text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-gray-600 hover:text-gray-900'}`}>My Orders</button>
+        <div className="flex items-center gap-2 md:gap-6">
+          <div className="flex items-center gap-1 text-sm">
+            {[['menu', 'New order'], ['history', 'My orders']].map(([tab, label]) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 py-1.5 rounded-md transition-colors ${activeTab === tab ? 'bg-ink text-cream' : 'text-black hover:text-ink'}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="hidden md:flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-full backdrop-blur-md">
-            <UserIcon size={16} className="text-cyan-400" />
-            <span className="text-sm font-medium text-gray-900">{user?.firstName} {user?.lastName}</span>
-          </div>
-          <button 
-            onClick={logout} 
-            className="flex items-center gap-2 text-gray-600 hover:text-red-400 transition-colors bg-white hover:bg-gray-100 px-4 py-2 rounded-full border border-gray-200 backdrop-blur-md"
-          >
-            <LogOut size={16} /> 
-            <span className="text-sm font-medium hidden sm:block">Log out</span>
+          <span className="hidden lg:flex items-center gap-2 text-sm text-black">
+            <UserIcon size={15} /> {user?.firstName} {user?.lastName}
+          </span>
+          <button onClick={logout} className="flex items-center gap-1.5 text-sm text-black hover:text-accent transition-colors">
+            <LogOut size={15} /> <span className="hidden sm:inline">Log out</span>
           </button>
         </div>
       </nav>
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative z-10">
-        
-        {/* LEFT PANEL: AI ASSISTANT */}
-        <div className="w-full md:w-1/4 border-r border-gray-200 bg-white/40 backdrop-blur-sm flex flex-col items-center py-10 px-6 h-full overflow-y-auto hide-scrollbar shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20">
-          <div className="relative w-48 h-48 flex items-center justify-center mb-10 mt-6">
-            <AnimatePresence>
-              {isRecording && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  className="absolute inset-0 rounded-full bg-gradient-to-tr from-cyan-400 to-purple-500 blur-xl opacity-50 animate-pulse"
-                />
-              )}
-            </AnimatePresence>
-            
-            <button 
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+
+        {/* LEFT PANEL: ASSISTANT */}
+        <div className="w-full md:w-[300px] lg:w-[320px] shrink-0 border-b md:border-b-0 md:border-r border-line flex flex-col items-center py-8 px-5 md:h-full overflow-y-auto hide-scrollbar">
+          <div className="relative w-36 h-36 flex items-center justify-center mb-4">
+            {isRecording && <span className="absolute inset-2 rounded-full bg-accent/15 animate-ping" />}
+            <button
               onClick={isRecording ? stopSession : startSession}
               disabled={isConnecting}
-              className={`relative z-10 w-32 h-32 rounded-full flex items-center justify-center transition-all duration-500 overflow-hidden shadow-2xl
-                ${isRecording 
-                  ? 'bg-gradient-to-br from-gray-100 to-gray-200 border-2 border-cyan-500/50 shadow-[0_0_50px_rgba(6,182,212,0.5)]' 
-                  : 'bg-white border border-gray-200 hover:bg-gray-100 backdrop-blur-xl hover:scale-105'
-                }
+              aria-label={isRecording ? 'Stop listening' : 'Start voice order'}
+              className={`relative z-10 w-28 h-28 rounded-full flex items-center justify-center transition-colors
+                ${isRecording ? 'bg-accent text-white' : 'bg-cream border-2 border-ink text-ink hover:bg-accent-soft'}
                 ${isConnecting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}
               `}
             >
-              {isRecording && (
-                <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-80">
-                   <motion.div animate={{ height: ["20%", "70%", "30%", "80%", "20%"] }} transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }} className="w-1.5 rounded-full bg-cyan-400"></motion.div>
-                   <motion.div animate={{ height: ["40%", "90%", "20%", "60%", "40%"] }} transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut", delay: 0.1 }} className="w-1.5 rounded-full bg-blue-400"></motion.div>
-                   <motion.div animate={{ height: ["30%", "60%", "90%", "40%", "30%"] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", delay: 0.2 }} className="w-1.5 rounded-full bg-purple-400"></motion.div>
-                   <motion.div animate={{ height: ["60%", "20%", "70%", "90%", "60%"] }} transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", delay: 0.3 }} className="w-1.5 rounded-full bg-pink-400"></motion.div>
-                   <motion.div animate={{ height: ["20%", "80%", "40%", "60%", "20%"] }} transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut", delay: 0.4 }} className="w-1.5 rounded-full bg-cyan-400"></motion.div>
+              {isRecording ? (
+                <div className="flex items-center gap-1.5 h-10">
+                  {[1.5, 1.2, 1.8, 1.4, 1.6].map((d, i) => (
+                    <motion.span
+                      key={i}
+                      animate={{ height: ['25%', '85%', '35%', '70%', '25%'] }}
+                      transition={{ duration: d, repeat: Infinity, ease: 'easeInOut', delay: i * 0.1 }}
+                      className="w-1.5 rounded-full bg-white"
+                    />
+                  ))}
                 </div>
+              ) : isConnecting ? (
+                <Loader2 className="animate-spin" size={30} />
+              ) : (
+                <Mic size={34} />
               )}
-              <div className={`relative z-20 transition-all duration-300 ${isRecording ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}>
-                {isConnecting ? <Loader2 className="text-gray-900 animate-spin" size={32} /> : <Mic className="text-gray-900" size={36} />}
-              </div>
             </button>
           </div>
 
-          <p className="text-xs font-bold tracking-widest uppercase text-gray-500 mb-8">
-            {isConnecting ? "Connecting..." : isRecording ? "Listening..." : "Tap to speak"}
+          <p className="text-sm text-black mb-6">
+            {isConnecting ? 'Connecting…' : isRecording ? 'Listening… tap to stop' : 'Tap to speak'}
           </p>
 
-          <motion.div 
-            layout
-            className={`w-full bg-white border border-gray-200 rounded-2xl p-5 transition-all duration-300 ${isRecording ? 'opacity-100' : 'opacity-60'} mb-4`}
-          >
-            <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
-              <Volume2 size={14} className="text-cyan-400" />
-              <span className="text-gray-600 text-xs font-medium uppercase tracking-wider">AI Transcript</span>
+          <div className="w-full border border-line rounded-lg p-4 mb-3">
+            <div className="flex items-center gap-2 mb-2.5 text-xs text-black">
+              <Volume2 size={13} className="text-accent" /> Conversation
             </div>
-            <div className="text-gray-900 text-sm font-medium leading-relaxed min-h-[60px] max-h-[150px] overflow-y-auto hide-scrollbar italic">
+            <div className="text-sm text-ink leading-relaxed min-h-[60px] max-h-[180px] overflow-y-auto hide-scrollbar">
               {chatHistory.length > 0 ? (
                 <div className="space-y-2">
                   {chatHistory.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <span className={`px-3 py-1.5 rounded-2xl inline-block ${msg.role === 'user' ? 'bg-cyan-100 text-cyan-800' : 'bg-gray-100 text-gray-800'}`}>
+                      <span className={`px-3 py-1.5 rounded-lg inline-block ${msg.role === 'user' ? 'bg-ink text-cream' : 'bg-accent-soft text-ink'}`}>
                         {msg.text}
                       </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p>"{transcript || 'Say something or type below...'}"</p>
+                <p className="text-black">{transcript || 'Say something, or type your order below.'}</p>
               )}
             </div>
-          </motion.div>
+          </div>
 
           <form onSubmit={handleSendText} className="w-full flex gap-2">
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder="Type your order..." 
-              className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+              placeholder="Type your order…"
+              className="flex-1 min-w-0 bg-transparent border border-line rounded-md px-3.5 py-2.5 text-sm text-ink placeholder-neutral-400 outline-none focus:border-ink transition-colors"
               disabled={isSending}
             />
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={isSending || !textInput.trim()}
-              className="bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl px-4 py-2 flex items-center justify-center transition-colors disabled:opacity-50"
+              aria-label="Send"
+              className="bg-accent hover:bg-accent-dark text-white rounded-md px-3.5 flex items-center justify-center transition-colors disabled:opacity-40"
             >
-              {isSending ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
+              {isSending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
             </button>
           </form>
 
-          <div className="mt-4 flex items-start gap-2 text-gray-500 text-xs">
-             <Info size={14} className="shrink-0 mt-0.5" />
-             <p>Our AI is fully aware of the menu items shown on the right. Just ask it what you want!</p>
-          </div>
+          <p className="mt-4 text-xs text-black leading-relaxed">
+            The assistant knows everything on the menu. Ask for sizes, extras or changes in your own words.
+          </p>
         </div>
 
-        {/* CENTER PANEL: MAIN MENU OR OVERLAYS */}
-        <div className="flex-1 flex flex-col p-8 lg:p-12 h-full overflow-y-auto hide-scrollbar z-10">
+        {/* CENTER PANEL: MENU / ORDERS / CHECKOUT */}
+        <div className="flex-1 flex flex-col px-5 py-8 md:px-10 md:py-10 h-full overflow-y-auto hide-scrollbar">
           {paymentAction ? (
             <div className="flex-1 flex flex-col items-center justify-center">
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-lg bg-white backdrop-blur-3xl border border-blue-500/30 p-10 rounded-[2.5rem] flex flex-col items-center shadow-2xl"
-              >
-                <div className="w-full flex justify-between items-center mb-8 border-b border-gray-200 pb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                    <ShieldCheck className="text-blue-400" size={32}/> Secure Checkout
+              <div className="w-full max-w-md border border-line rounded-xl p-8 flex flex-col items-center">
+                <div className="w-full flex justify-between items-baseline mb-6 pb-5 border-b border-line">
+                  <h2 className="font-display text-2xl font-semibold text-ink flex items-center gap-2">
+                    <ShieldCheck className="text-accent" size={22} /> Checkout
                   </h2>
-                  <span className="text-3xl font-black text-green-400">₹{paymentAction.paymentDetails.amount.toFixed(2)}</span>
+                  <span className="text-2xl font-semibold text-ink tabular-nums">₹{paymentAction.paymentDetails.amount.toFixed(2)}</span>
                 </div>
 
                 {paymentAction.paymentDetails.method === 'upi' ? (
-                  <div className="flex flex-col items-center bg-white p-8 rounded-2xl mb-8 w-full max-w-xs">
-                    <QrCode size={160} className="text-black mb-4" />
-                    <p className="text-black font-bold text-lg">Scan to Pay via UPI</p>
+                  <div className="flex flex-col items-center bg-white border border-line p-6 rounded-lg mb-6">
+                    <QrCode size={150} className="text-ink mb-3" />
+                    <p className="text-sm font-medium text-ink">Scan to pay via UPI</p>
                   </div>
                 ) : (
-                  <div className="w-full flex flex-col gap-4 mb-8">
-                    <div className="flex items-center gap-3 bg-gray-50 p-5 rounded-xl border border-gray-200">
-                      <CreditCard className="text-gray-600" size={24} />
-                      <input type="text" placeholder="Card Number" className="bg-transparent outline-none text-gray-900 w-full text-lg" readOnly value="**** **** **** 4242" />
+                  <div className="w-full flex flex-col gap-3 mb-6">
+                    <div className="flex items-center gap-3 border border-line p-3.5 rounded-md">
+                      <CreditCard className="text-black" size={20} />
+                      <input type="text" placeholder="Card Number" className="bg-transparent outline-none text-ink w-full" readOnly value="**** **** **** 4242" />
                     </div>
-                    <div className="flex gap-4">
-                       <input type="text" placeholder="MM/YY" className="bg-gray-50 p-5 rounded-xl border border-gray-200 outline-none text-gray-900 w-1/2 text-lg" readOnly value="12/26" />
-                       <input type="text" placeholder="CVV" className="bg-gray-50 p-5 rounded-xl border border-gray-200 outline-none text-gray-900 w-1/2 text-lg" readOnly value="***" />
+                    <div className="flex gap-3">
+                      <input type="text" placeholder="MM/YY" className="bg-transparent border border-line p-3.5 rounded-md outline-none text-ink w-1/2" readOnly value="12/26" />
+                      <input type="text" placeholder="CVV" className="bg-transparent border border-line p-3.5 rounded-md outline-none text-ink w-1/2" readOnly value="***" />
                     </div>
                   </div>
                 )}
 
-                <button 
+                <button
                   onClick={handlePaymentSuccess}
                   disabled={isProcessingPayment}
-                  className="w-full py-5 bg-blue-600 text-gray-900 text-lg font-bold rounded-2xl hover:bg-blue-700 transition-colors shadow-[0_0_40px_rgba(37,99,235,0.4)] flex items-center justify-center gap-3"
+                  className="w-full py-3.5 bg-accent text-white font-medium rounded-md hover:bg-accent-dark transition-colors flex items-center justify-center gap-2"
                 >
-                  {isProcessingPayment ? <Loader2 className="animate-spin" size={24} /> : "Simulate Payment Success"}
+                  {isProcessingPayment ? <Loader2 className="animate-spin" size={20} /> : 'Simulate payment success'}
                 </button>
-              </motion.div>
+              </div>
             </div>
           ) : orderPlaced ? (
-            <div className="flex-1 flex flex-col items-center justify-center">
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-lg bg-white backdrop-blur-3xl border border-green-500/30 p-12 rounded-[3rem] flex flex-col items-center shadow-2xl text-center"
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <CheckCircle size={52} className="text-accent mb-5" />
+              <h2 className="font-display text-3xl font-semibold text-ink mb-3">Order confirmed</h2>
+              <p className="text-black mb-8 max-w-sm leading-relaxed">Thanks! The kitchen has your order and is getting started on it.</p>
+              <button
+                onClick={() => { setOrderPlaced(false); stopSession(); setLiveCart(null); setActiveTab('history'); apiService.getMyOrders().then(setMyOrders); }}
+                className="px-6 py-3 bg-ink text-cream font-medium rounded-md hover:bg-neutral-800 transition-colors"
               >
-                <div className="w-32 h-32 rounded-full bg-green-500/20 flex items-center justify-center mb-8 relative">
-                  <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping"></div>
-                  <CheckCircle size={64} className="text-green-400 relative z-10" />
-                </div>
-                <h2 className="text-4xl font-bold text-gray-900 mb-4">Order Confirmed!</h2>
-                <p className="text-gray-600 text-lg mb-10 leading-relaxed">Your voice order was successfully processed and the kitchen is on it.</p>
-                <button 
-                  onClick={() => { setOrderPlaced(false); stopSession(); setLiveCart(null); setActiveTab('history'); apiService.getMyOrders().then(setMyOrders); }}
-                  className="px-10 py-5 bg-white text-black text-lg font-bold rounded-full hover:bg-gray-200 transition-colors shadow-xl hover:-translate-y-1 transform duration-200"
-                >
-                  Track Order
-                </button>
-              </motion.div>
+                Track order
+              </button>
             </div>
           ) : activeTab === 'history' ? (
-            <div className="w-full max-w-4xl mx-auto pb-20">
-              <div className="mb-8 pb-4 border-b border-gray-200">
-                <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">My Orders</h1>
-                <p className="text-gray-600 text-lg">Track your active orders in real-time and view your past history.</p>
+            <div className="w-full max-w-3xl mx-auto pb-16">
+              <div className="mb-8 pb-5 border-b border-line">
+                <h1 className="font-display text-[32px] font-semibold text-ink leading-tight">My orders</h1>
+                <p className="mt-1.5 text-black">Follow your current order and see what you've had before.</p>
               </div>
-              
-              <div className="space-y-6">
-                {myOrders.length === 0 ? (
-                  <div className="py-20 text-center text-gray-500 bg-white rounded-3xl border border-gray-200">
-                    <Clock size={48} className="mx-auto mb-4 opacity-30" />
-                    <p className="text-xl font-bold text-gray-900 mb-2">No orders yet</p>
-                    <p>When you place an order, you can track it here.</p>
-                  </div>
-                ) : (
-                  myOrders.map(order => (
-                    <motion.div 
-                      key={order._id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white border border-gray-200 rounded-3xl p-8 backdrop-blur-md relative overflow-hidden"
-                    >
-                      {/* Active Order Glowing Border */}
-                      {order.status !== 'Completed' && order.status !== 'Cancelled' && (
-                        <div className="absolute inset-0 border-2 border-cyan-500/30 rounded-3xl pointer-events-none animate-pulse"></div>
-                      )}
-                      
-                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-gray-200 pb-6">
-                        <div>
-                          <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                            Order #{order._id.slice(-6).toUpperCase()}
-                            {order.status === 'Ready' && <span className="ml-2 w-3 h-3 bg-green-500 rounded-full animate-ping"></span>}
-                          </h3>
-                          <p className="text-sm text-gray-600 mt-1">{new Date(order.createdAt).toLocaleString()}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className="block text-2xl font-black text-green-400">₹{order.totalAmount.toFixed(2)}</span>
-                          <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">{order.paymentMethod} • {order.paymentStatus}</span>
-                        </div>
-                      </div>
 
-                      <div className="mb-8">
-                        <h4 className="text-sm font-bold text-gray-600 uppercase tracking-widest mb-4">Items Ordered</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {myOrders.length === 0 ? (
+                <div className="py-16 text-center border border-line rounded-xl">
+                  <Clock size={36} className="mx-auto mb-3 text-neutral-300" />
+                  <p className="font-medium text-ink mb-1">No orders yet</p>
+                  <p className="text-sm text-black">Your orders will show up here once you place one.</p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {myOrders.map(order => {
+                    const currentIndex = statuses.indexOf(order.status);
+                    const isActive = order.status !== 'Completed' && order.status !== 'Cancelled';
+                    return (
+                      <div key={order._id} className={`border rounded-xl p-6 ${isActive ? 'border-accent/50' : 'border-line'}`}>
+                        <div className="flex flex-wrap justify-between items-start gap-4 mb-5 pb-5 border-b border-line">
+                          <div>
+                            <h3 className="font-medium text-ink flex items-center gap-2">
+                              Order #{order._id.slice(-6).toUpperCase()}
+                              {isActive && <span className="text-[11px] font-medium text-accent bg-accent-soft px-2 py-0.5 rounded-full">{order.status}</span>}
+                            </h3>
+                            <p className="text-sm text-black mt-0.5">{new Date(order.createdAt).toLocaleString()}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="block text-lg font-semibold text-ink tabular-nums">₹{order.totalAmount.toFixed(2)}</span>
+                            <span className="text-xs text-black uppercase">{order.paymentMethod} · {order.paymentStatus}</span>
+                          </div>
+                        </div>
+
+                        <ul className="mb-6 space-y-1.5 text-sm">
                           {order.items.map((item, idx) => (
-                            <div key={idx} className="bg-gray-100 p-3 rounded-xl flex justify-between">
-                              <span className="font-bold text-gray-800">{item.quantity}x {item.name}</span>
-                              <span className="text-gray-600">₹{item.price * item.quantity}</span>
-                            </div>
+                            <li key={idx} className="flex justify-between">
+                              <span className="text-ink">{item.quantity} × {item.name}</span>
+                              <span className="text-black tabular-nums">₹{item.price * item.quantity}</span>
+                            </li>
                           ))}
-                        </div>
-                      </div>
+                        </ul>
 
-                      {/* Status Tracker */}
-                      <div className="bg-white/60 rounded-2xl p-6 border border-gray-100 relative">
-                        <div className="absolute top-1/2 left-10 right-10 h-1 bg-gray-100 -translate-y-1/2 z-0 hidden sm:block">
-                          <div 
-                            className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-500 to-green-500 transition-all duration-1000"
-                            style={{
-                              width: order.status === 'Completed' ? '100%' : order.status === 'Ready' ? '66.66%' : order.status === 'Preparing' ? '33.33%' : '0%'
-                            }}
-                          ></div>
-                        </div>
-                        
-                        <div className="flex justify-between relative z-10">
-                          {['Pending', 'Preparing', 'Ready', 'Completed'].map((step, idx) => {
-                            const statuses = ['Pending', 'Preparing', 'Ready', 'Completed'];
-                            const currentIndex = statuses.indexOf(order.status);
-                            const isCompleted = idx <= currentIndex;
-                            const isCurrent = idx === currentIndex && order.status !== 'Completed';
-                            
-                            return (
-                              <div key={step} className="flex flex-col items-center gap-2">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 shadow-xl
-                                  ${isCurrent ? 'bg-cyan-500 text-gray-900 scale-110 shadow-[0_0_20px_rgba(6,182,212,0.5)]' : isCompleted ? 'bg-green-500 text-gray-900' : 'bg-gray-100 text-gray-500'}
-                                `}>
-                                  {isCompleted && !isCurrent ? <CheckCircle size={20} /> : <Clock size={20} />}
-                                </div>
-                                <div className="text-center">
-                                  <span className={`block text-xs font-bold uppercase tracking-wider ${isCurrent ? 'text-cyan-400' : isCompleted ? 'text-green-400' : 'text-gray-500'}`}>
-                                    {step}
+                        {/* Status tracker */}
+                        <div className="relative">
+                          <div className="absolute top-[11px] left-3 right-3 h-0.5 bg-line">
+                            <div
+                              className="h-full bg-accent transition-all duration-700"
+                              style={{ width: `${Math.max(0, currentIndex) / (statuses.length - 1) * 100}%` }}
+                            />
+                          </div>
+                          <div className="relative flex justify-between">
+                            {statuses.map((step, idx) => {
+                              const done = idx <= currentIndex;
+                              const ts = order.statusTimestamps?.[step.toLowerCase()];
+                              return (
+                                <div key={step} className={`flex flex-col gap-1.5 ${idx === 0 ? 'items-start' : idx === statuses.length - 1 ? 'items-end' : 'items-center'}`}>
+                                  <span className={`w-6 h-6 rounded-full flex items-center justify-center ${done ? 'bg-accent text-white' : 'bg-cream border-2 border-line'}`}>
+                                    {done && <Check size={13} />}
                                   </span>
-                                  {order.statusTimestamps && order.statusTimestamps[step.toLowerCase()] && (
-                                    <span className="block text-[10px] text-gray-500 font-medium mt-1">
-                                      {new Date(order.statusTimestamps[step.toLowerCase()]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  <span className={`text-xs ${done ? 'text-ink font-medium' : 'text-neutral-400'}`}>{step}</span>
+                                  {ts && (
+                                    <span className="text-[11px] text-black -mt-1">
+                                      {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                       {step !== 'Pending' && order.statusTimestamps.pending && (
-                                        <span className="text-cyan-400/70 ml-1">
-                                          ( +{Math.max(0, Math.floor((new Date(order.statusTimestamps[step.toLowerCase()]) - new Date(order.statusTimestamps.pending)) / 60000))}m )
-                                        </span>
+                                        <> (+{Math.max(0, Math.floor((new Date(ts) - new Date(order.statusTimestamps.pending)) / 60000))}m)</>
                                       )}
                                     </span>
                                   )}
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
-                    </motion.div>
-                  ))
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             <>
-              <div className="mb-8 pb-4">
-                <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-2">Our Menu</h1>
-                <p className="text-gray-600 text-lg">Delicious food ready to be ordered by voice.</p>
+              <div className="mb-8">
+                <h1 className="font-display text-[32px] font-semibold text-ink leading-tight">Menu</h1>
+                <p className="mt-1.5 text-black">Tap an item to see its options, then just ask for it.</p>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-20">
-                {menuItems.map(item => (
-                  <div 
-                    key={item._id} 
-                    onClick={() => setSelectedItem(item)}
-                    className="bg-white border border-gray-200 rounded-3xl overflow-hidden hover:bg-gray-100 transition-all hover:-translate-y-2 group cursor-pointer shadow-lg flex flex-col"
-                  >
-                    <div className="h-48 w-full relative overflow-hidden bg-white/60">
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Utensils className="text-gray-900/20" size={48} />
-                        </div>
-                      )}
-                      <div className="absolute top-4 right-4 bg-white/80 backdrop-blur-md px-3 py-1 rounded-full border border-gray-200">
-                        <span className="text-green-400 font-bold">₹{item.price.toFixed(2)}</span>
+
+              {menuItems.length === 0 ? (
+                <div className="py-20 text-center text-black">
+                  <Loader2 size={32} className="mx-auto mb-3 animate-spin text-neutral-400" />
+                  <p className="text-sm">Loading the menu…</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-8 pb-16">
+                  {menuItems.map(item => (
+                    <button key={item._id} onClick={() => setSelectedItem(item)} className="group text-left">
+                      <div className="aspect-[4/3] overflow-hidden rounded-lg bg-line">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center"><Utensils className="text-neutral-400" size={36} /></div>
+                        )}
                       </div>
-                    </div>
-                    <div className="p-5 flex flex-col flex-1">
-                      <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-cyan-400 mb-2">
-                        {item.category}
-                      </span>
-                      <h3 className="text-gray-900 text-lg font-bold mb-2 leading-tight">{item.name}</h3>
-                      <p className="text-gray-600 text-sm leading-relaxed line-clamp-2 mt-auto">{item.description}</p>
-                    </div>
-                  </div>
-                ))}
-                {menuItems.length === 0 && (
-                  <div className="col-span-full py-20 text-center text-gray-500">
-                    <Loader2 size={48} className="mx-auto mb-4 opacity-50 animate-spin" />
-                    <p>Loading the menu...</p>
-                  </div>
-                )}
-              </div>
+                      <div className="mt-3 flex items-baseline justify-between gap-3">
+                        <h3 className="text-[15px] font-medium text-ink">{item.name}</h3>
+                        <span className="text-[15px] text-ink tabular-nums">₹{item.price}</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-black">{item.category}</p>
+                      {item.description && <p className="mt-1 text-[13px] text-black leading-relaxed line-clamp-2">{item.description}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
 
         {/* RIGHT PANEL: LIVE CART */}
-        <div className="w-full md:w-1/4 border-l border-gray-200 bg-white/40 backdrop-blur-sm p-6 h-full flex flex-col hidden md:flex shadow-[-10px_0_30px_rgba(0,0,0,0.5)] z-20">
-          <div className="border-b border-gray-200 pb-4 mb-6 mt-4">
-             <h2 className="text-gray-900 text-xl font-bold flex items-center gap-2">
-               <ShoppingCart className="text-cyan-400" size={20}/> Live Cart
-             </h2>
-          </div>
-          
-          {!liveCart || liveCart.items.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 text-center">
-              <ShoppingCart size={64} className="opacity-10 mb-4" />
-              <p className="font-medium text-gray-600">Your cart is empty.</p>
-              <p className="text-sm mt-2 opacity-75">Tell the AI what you'd like to order, and watch it appear here!</p>
+        <div className="hidden md:flex w-[300px] lg:w-[320px] shrink-0 border-l border-line p-6 h-full flex-col">
+          <h2 className="font-display text-xl font-semibold text-ink flex items-center gap-2 pb-4 mb-5 border-b border-line">
+            <ShoppingCart className="text-accent" size={19} /> Your cart
+          </h2>
+
+          {!hasCart ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-2">
+              <ShoppingCart size={40} className="text-neutral-300 mb-3" />
+              <p className="font-medium text-ink">Your cart is empty</p>
+              <p className="text-sm text-black mt-1.5 leading-relaxed">Tell the assistant what you'd like and it will show up here.</p>
             </div>
           ) : (
-            <div className="flex flex-col h-full">
-              <div className="flex-1 overflow-y-auto pr-2 hide-scrollbar pb-6">
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto hide-scrollbar">
                 <AnimatePresence>
                   {liveCart.items.map((item, idx) => (
-                    <motion.div 
+                    <motion.div
                       key={idx}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-lg relative overflow-hidden group"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="flex justify-between items-start gap-3 py-3 border-b border-line text-sm"
                     >
-                      <div className="flex justify-between items-start relative z-10">
-                        <div>
-                          <h4 className="text-gray-900 font-bold mb-1 leading-tight pr-4">{item.name}</h4>
-                          <span className="text-gray-600 text-[10px] font-bold uppercase tracking-wider bg-gray-50 px-2 py-1 rounded">Qty: {item.quantity}</span>
-                        </div>
-                        <span className="text-gray-900 font-bold">₹{item.price ? (item.price * item.quantity).toFixed(2) : '0.00'}</span>
+                      <div>
+                        <div className="text-ink font-medium leading-snug">{item.name}</div>
+                        <div className="text-xs text-black mt-0.5">Qty {item.quantity}</div>
                       </div>
+                      <span className="text-ink tabular-nums">₹{item.price ? (item.price * item.quantity).toFixed(2) : '0.00'}</span>
                     </motion.div>
                   ))}
                 </AnimatePresence>
               </div>
-              
-              <div className="mt-auto pt-6 border-t border-gray-200 bg-white/60 -mx-6 px-6 -mb-6 pb-8 rounded-t-3xl backdrop-blur-md">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600 font-medium text-sm">Subtotal</span>
-                  <span className="text-gray-900">₹{liveCart.totalAmount.toFixed(2)}</span>
+
+              <div className="pt-5 mt-4 border-t border-line">
+                <div className="flex justify-between items-baseline mb-5">
+                  <span className="text-ink font-medium">Total</span>
+                  <span className="text-2xl font-semibold text-ink tabular-nums">₹{liveCart.totalAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-gray-900 font-bold text-lg">Total</span>
-                  <span className="text-3xl font-black text-green-400">₹{liveCart.totalAmount.toFixed(2)}</span>
-                </div>
-                <button 
+                <button
                   onClick={handleMakePayment}
                   disabled={isProcessingPayment}
-                  className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-gray-900 font-bold rounded-2xl shadow-[0_0_20px_rgba(34,197,94,0.4)] hover:shadow-[0_0_30px_rgba(34,197,94,0.6)] hover:-translate-y-1 transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3.5 bg-accent text-white font-medium rounded-md hover:bg-accent-dark transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  {isProcessingPayment ? <Loader2 className="animate-spin" size={20} /> : <CreditCard size={20} />}
-                  {isProcessingPayment ? "Processing..." : "Make Payment"}
+                  {isProcessingPayment ? <Loader2 className="animate-spin" size={18} /> : <CreditCard size={18} />}
+                  {isProcessingPayment ? 'Processing…' : 'Pay now'}
                 </button>
               </div>
             </div>
@@ -561,67 +490,74 @@ export default function CustomerInterface() {
         </div>
       </div>
 
+      {/* Mobile cart bar */}
+      {hasCart && !paymentAction && !orderPlaced && (
+        <div className="md:hidden border-t border-line bg-cream px-5 py-3 flex items-center justify-between gap-4">
+          <div className="text-sm">
+            <div className="text-black">{liveCart.items.reduce((n, i) => n + i.quantity, 0)} items</div>
+            <div className="font-semibold text-ink tabular-nums">₹{liveCart.totalAmount.toFixed(2)}</div>
+          </div>
+          <button
+            onClick={handleMakePayment}
+            disabled={isProcessingPayment}
+            className="px-5 py-2.5 bg-accent text-white text-sm font-medium rounded-md disabled:opacity-60"
+          >
+            {isProcessingPayment ? 'Processing…' : 'Pay now'}
+          </button>
+        </div>
+      )}
+
       {/* DETAILS MODAL */}
       <AnimatePresence>
         {selectedItem && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-white/80 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/40"
             onClick={() => setSelectedItem(null)}
           >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl bg-white border border-gray-200 rounded-[2rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)] relative flex flex-col md:flex-row"
+              className="w-full max-w-2xl bg-cream rounded-xl overflow-hidden relative flex flex-col md:flex-row max-h-[90vh]"
             >
-              <button 
+              <button
                 onClick={() => setSelectedItem(null)}
-                className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 text-gray-900 hover:bg-white transition-colors"
+                aria-label="Close"
+                className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-cream text-ink hover:bg-line transition-colors"
               >
-                <X size={18} />
+                <X size={17} />
               </button>
 
-              <div className="w-full md:w-1/2 h-64 md:h-auto relative bg-white">
+              <div className="w-full md:w-1/2 h-56 md:h-auto bg-line shrink-0">
                 {selectedItem.image ? (
                   <img src={selectedItem.image} alt={selectedItem.name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Utensils className="text-gray-900/20" size={64} />
-                  </div>
+                  <div className="w-full h-full flex items-center justify-center"><Utensils className="text-neutral-400" size={48} /></div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#111] via-transparent to-transparent md:hidden" />
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#111] hidden md:block" />
               </div>
 
-              <div className="w-full md:w-1/2 p-8 flex flex-col">
-                <span className="inline-block text-xs font-bold uppercase tracking-wider text-cyan-400 mb-2">
-                  {selectedItem.category}
-                </span>
-                <h2 className="text-3xl font-black text-gray-900 mb-2 leading-tight">{selectedItem.name}</h2>
-                <div className="text-2xl font-black text-green-400 mb-6">₹{selectedItem.price.toFixed(2)}</div>
-                
-                <p className="text-gray-300 text-sm leading-relaxed mb-8">
-                  {selectedItem.description}
-                </p>
+              <div className="w-full md:w-1/2 p-7 flex flex-col overflow-y-auto">
+                <span className="text-xs text-black mb-1">{selectedItem.category}</span>
+                <h2 className="font-display text-2xl font-semibold text-ink leading-tight">{selectedItem.name}</h2>
+                <div className="text-lg text-ink mt-1 mb-4 tabular-nums">₹{selectedItem.price.toFixed(2)}</div>
+                {selectedItem.description && <p className="text-sm text-black leading-relaxed mb-6">{selectedItem.description}</p>}
 
-                {selectedItem.customizations && selectedItem.customizations.length > 0 && (
+                {selectedItem.customizations?.length > 0 && (
                   <div className="mt-auto">
-                    <h4 className="text-gray-900 font-bold text-sm mb-3 uppercase tracking-wider flex items-center gap-2">
-                      <Info size={14} className="text-cyan-400"/> Ask AI to Customize
+                    <h4 className="text-sm font-medium text-ink mb-3 flex items-center gap-2">
+                      <Info size={14} className="text-accent" /> Options you can ask for
                     </h4>
-                    <div className="flex flex-col gap-3">
+                    <div className="space-y-3">
                       {selectedItem.customizations.map((cust, i) => (
-                        <div key={i} className="bg-white border border-gray-100 p-3 rounded-xl">
-                          <span className="text-xs text-gray-600 font-bold block mb-1">{cust.name}</span>
+                        <div key={i}>
+                          <span className="text-xs text-black block mb-1.5">{cust.name}</span>
                           <div className="flex flex-wrap gap-1.5">
                             {cust.options.map((opt, j) => (
-                              <span key={j} className="text-[10px] bg-gray-100 text-gray-300 px-2 py-1 rounded-md">
-                                {opt}
-                              </span>
+                              <span key={j} className="text-xs border border-line text-black px-2 py-1 rounded">{opt}</span>
                             ))}
                           </div>
                         </div>
